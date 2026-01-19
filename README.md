@@ -2,7 +2,7 @@ Domains Intelligence
 Domains Intelligence is a Python‑based security tool that performs automated external asset discovery and threat assessment for organizational domains. It combines passive reconnaissance (Certificate Transparency logs, WHOIS, DNS records) with active enrichment (TLS certificate inspection, SSLLabs grading, reputation checks via AbuseIPDB, AlienVault OTX, VirusTotal, and URLScan).
 This project is designed for internal use by security teams to continuously monitor internet‑facing assets, identify misconfigurations, and assess risk posture in a safe, audit‑friendly way.
 
-✨ Features
+Features
 - Certificate Transparency Enumeration — Discover hidden subdomains via crt.sh.
 - DNS Record Collection — A, AAAA, CNAME, NS, MX, TXT, SPF, DMARC.
 - TLS Certificate Inspection — Extract CN, O, SANs, Issuer, validity dates; flag expired certs.
@@ -14,14 +14,14 @@ This project is designed for internal use by security teams to continuously moni
 - Subdomain Takeover Heuristics — Identify dangling CNAMEs pointing to SaaS providers.
 - Reporting — Export results to CSV/JSON/HTML with severity scoring and evidence snapshots.
 
-🛡️ Security & Compliance
+Security & Compliance
 - Safe by design: Passive recon only, no intrusive scanning.
 - Secrets management: API keys stored in .env.local, never committed.
 - Rate limiting: Built‑in backoff and concurrency caps to avoid bans.
 - Audit logging: Structured JSON logs for traceability.
 - Legal use: Only run against domains you own/manage or have explicit permission to test.
 
-🚀 Getting Started
+Getting Started
 Prerequisites
 - Python 3.9+
 - Install dependencies:
@@ -47,12 +47,12 @@ python cli.py report --output csv html
 
 
 
-📊 Outputs
+Outputs
 - CSV/JSON — Structured domain intelligence.
 - HTML Dashboard — Interactive view with severity badges.
 - Evidence Folder — Screenshots, raw API responses, logs.
 
-🔧 Use Cases
+Use Cases
 - External attack surface discovery
 - Shadow IT and forgotten subdomain identification
 - Certificate lifecycle monitoring
@@ -60,7 +60,7 @@ python cli.py report --output csv html
 - Threat hunting and SOC investigations
 - Continuous external asset inventory
 
-⚠️ Disclaimer
+Disclaimer
 This tool is intended for authorized internal security testing only. Do not use it against domains you do not own or manage. Misuse may violate laws or provider terms of service.
 
 
