@@ -1,0 +1,126 @@
+# Domain Intelligence Configuration
+# ================================
+
+# Target domains for analysis
+targets:
+  domains: []  # Add domains here or use CLI --domain flag
+  input_file: null  # Or specify a file path with domains
+
+# Module settings
+modules:
+  ct_enumeration:
+    enabled: true
+    timeout: 30
+  
+  dns_enumeration:
+    enabled: true
+    record_types:
+      - A
+      - AAAA
+      - CNAME
+      - NS
+      - MX
+      - TXT
+      - SOA
+    timeout: 10
+    nameservers:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
+  
+  tls_inspection:
+    enabled: true
+    timeout: 15
+    ports:
+      - 443
+    check_expiry_days: 30  # Warn if cert expires within X days
+  
+  whois_lookup:
+    enabled: true
+    timeout: 15
+  
+  ssllabs:
+    enabled: true
+    timeout: 300  # SSLLabs can take a while
+    max_age: 24  # hours - use cached results if available
+  
+  threat_intel:
+    abuseipdb:
+      enabled: true
+      max_age_days: 90  # Report abuse within last X days
+    
+    alienvault_otx:
+      enabled: true
+    
+    virustotal:
+      enabled: true
+    
+    criminalip:
+      enabled: false  # Enable when API key is configured
+    
+    urlscan:
+      enabled: true
+      visibility: public  # public or private
+      store_screenshots: true
+  
+  redirect_analysis:
+    enabled: true
+    max_redirects: 10
+    timeout: 15
+    verify_ssl: true  # SSL verification enabled by default for security
+  
+  takeover_detection:
+    enabled: true
+
+# Rate limiting (requests per minute)
+rate_limits:
+  crtsh: 30
+  dns: 100
+  whois: 10
+  ssllabs: 2
+  abuseipdb: 60
+  alienvault_otx: 10
+  virustotal: 4
+  criminalip: 10
+  urlscan: 2
+
+# Concurrency settings
+concurrency:
+  max_workers: 10
+  batch_size: 50
+
+# Output settings
+output:
+  directory: ./output
+  evidence_directory: ./evidence
+  formats:
+    - json
+    - csv
+    - html
+  include_raw_responses: false
+  timestamp_format: "%Y-%m-%d_%H-%M-%S"
+
+# Logging settings
+logging:
+  level: DEBUG  # DEBUG, INFO, WARNING, ERROR
+  format: json  # json or text
+  file: ./logs/domain_intel.log
+  max_size_mb: 10
+  backup_count: 5
+
+# Proxy settings (optional)
+proxy:
+  enabled: false
+  http: null
+  https: null
+
+# Custom user agent
+user_agent: "DomainIntelligence/1.0 (Security Assessment Tool)"
+
+# Email/SMTP settings (configure here for email reports)
+email:
+  smtp_server: "smtp.gmail.com"
+  smtp_port: 587
+  sender_email: ""  # Your email address
+  sender_password: ""  # App password (not regular password)
+  use_tls: true
