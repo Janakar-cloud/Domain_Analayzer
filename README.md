@@ -10,6 +10,13 @@ This project is designed for internal use by security teams to continuously moni
 | Frontend  | Dev 2     | Streamlit UI, UX flow, result visualizations  |
 | Infra     | Dev 3     | Config, logging, rate limits, packaging/CI    |
 
+| Area      | Approx. Hours | Notes                           |
+|-----------|---------------|---------------------------------|
+| Backend   | 80–100        | Recon modules, intel, reporting |
+| Frontend  | 40–50         | Streamlit UI/UX                 |
+| Infra     | 40–50         | Config, logging, CI/CD          |
+| **Total** | **160–200**   | Three engineers, ~5 days        |
+
 ## Features
 - Certificate Transparency Enumeration — Discover hidden subdomains via crt.sh.
 - DNS Record Collection — A, AAAA, CNAME, NS, MX, TXT, SPF, DMARC.
