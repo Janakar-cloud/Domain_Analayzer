@@ -2,6 +2,21 @@
 Domains Intelligence is a Python‑based security tool that performs automated external asset discovery and threat assessment for organizational domains. It combines passive reconnaissance (Certificate Transparency logs, WHOIS, DNS records) with active enrichment (TLS certificate inspection, SSLLabs grading, reputation checks via AbuseIPDB, AlienVault OTX, VirusTotal, and URLScan).
 This project is designed for internal use by security teams to continuously monitor internet‑facing assets, identify misconfigurations, and assess risk posture in a safe, audit‑friendly way.
 
+> Build provenance: Delivered by a 3‑engineer team (backend, frontend, infra) using Copilot Pro assistance over ~5 working days.
+
+| Area      | Lead Role | Scope Highlights                              |
+|-----------|-----------|-----------------------------------------------|
+| Backend   | Dev 1     | CT/DNS/TLS modules, threat intel, reporters   |
+| Frontend  | Dev 2     | Streamlit UI, UX flow, result visualizations  |
+| Infra     | Dev 3     | Config, logging, rate limits, packaging/CI    |
+
+| Area      | Approx. Hours | Notes                           |
+|-----------|---------------|---------------------------------|
+| Backend   | 80–100        | Recon modules, intel, reporting |
+| Frontend  | 40–50         | Streamlit UI/UX                 |
+| Infra     | 40–50         | Config, logging, CI/CD          |
+| **Total** | **160–200**   | Three engineers, ~5 days        |
+
 ## Features
 - Certificate Transparency Enumeration — Discover hidden subdomains via crt.sh.
 - DNS Record Collection — A, AAAA, CNAME, NS, MX, TXT, SPF, DMARC.
@@ -62,5 +77,3 @@ python cli.py report --output csv html
 
 Disclaimer
 This tool is intended for authorized internal security testing only. Do not use it against domains you do not own or manage. Misuse may violate laws or provider terms of service.
-
-

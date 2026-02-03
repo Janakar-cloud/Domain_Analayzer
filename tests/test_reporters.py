@@ -182,6 +182,15 @@ class TestCSVReporter:
         
         assert path.exists()
         assert path.suffix == ".csv"
+        
+        # Verify filename suffix is csv and contains expected columns for first row
+        with open(path, newline='') as f:
+            reader = csv.reader(f)
+            headers = next(reader)
+            first_row = next(reader)
+        
+        assert headers[0:3] == ["domain", "CN", "O"]
+        assert len(first_row) == len(headers)
 
     def test_csv_headers(self, mock_config, sample_results):
         """Test CSV has correct headers."""
@@ -193,12 +202,21 @@ class TestCSVReporter:
             headers = next(reader)
         
         expected_headers = [
-            "Domain", "Scan Timestamp", "Subdomains Count", "Resolved IPs",
-            "TLS CN", "TLS Issuer", "TLS Expires", "TLS Expired",
-            "WHOIS Registrar", "WHOIS Created", "WHOIS Expires", "Domain Age (days)",
-            "SSLLabs Grade", "Severity Score", "Critical Findings", "High Findings",
-            "Medium Findings", "Low Findings", "Info Findings", "Takeover Candidate",
-            "Errors"
+            "domain",
+            "CN",
+            "O",
+            "Issuer CN",
+            "Issuer O",
+            "Not Before",
+            "Not After",
+            "cert_error",
+            "A",
+            "CNAME",
+            "NS",
+            "MX",
+            "TXT",
+            "SPF",
+            "DMARC",
         ]
         assert headers == expected_headers
 
@@ -213,11 +231,19 @@ class TestCSVReporter:
         
         assert len(rows) == 2
         
-        example_row = next(r for r in rows if r["Domain"] == "example.com")
-        assert example_row["Subdomains Count"] == "2"
-        assert example_row["TLS CN"] == "example.com"
-        assert example_row["Critical Findings"] == "1"
-        assert example_row["Medium Findings"] == "1"
+        example_row = next(r for r in rows if r["domain"] == "example.com")
+        assert example_row["CN"] == "example.com"
+        assert example_row["O"] == ""
+        assert example_row["Issuer CN"] == "DigiCert"
+        assert example_row["Issuer O"] == ""
+        assert example_row["Not After"].startswith("2025-01-15")
+        assert example_row["A"] == ""
+        assert example_row["CNAME"] == ""
+        assert example_row["NS"] == ""
+        assert example_row["MX"] == ""
+        assert example_row["TXT"] == ""
+        assert example_row["SPF"] == ""
+        assert example_row["DMARC"] == ""
 
 
 class TestHTMLReporter:

@@ -166,6 +166,7 @@ class DNSEnumerationModule(BaseModule):
                 remediation="Add an SPF record to prevent email spoofing. Example: v=spf1 include:_spf.google.com ~all",
                 references=["https://www.cloudflare.com/learning/dns/dns-records/dns-spf-record/"],
             ))
+            result.spf_record = None
         elif len(spf_records) > 1:
             result.add_finding(Finding(
                 title="Multiple SPF Records",
@@ -175,8 +176,10 @@ class DNSEnumerationModule(BaseModule):
                 evidence="\n".join([r.value for r in spf_records]),
                 remediation="Merge multiple SPF records into a single record. Multiple SPF records can cause delivery issues.",
             ))
+            result.spf_record = spf_records[0].value if spf_records else None
         else:
             spf_value = spf_records[0].value.lower()
+            result.spf_record = spf_records[0].value
             
             # Check for weak SPF
             if "+all" in spf_value:
@@ -213,8 +216,10 @@ class DNSEnumerationModule(BaseModule):
                 remediation="Add a DMARC record to enable email authentication reporting. Example: v=DMARC1; p=quarantine; rua=mailto:dmarc@example.com",
                 references=["https://dmarc.org/overview/"],
             ))
+            result.dmarc_record = None
         else:
             dmarc_value = dmarc_records[0].value.lower()
+            result.dmarc_record = dmarc_records[0].value
             
             # Check for none policy
             if "p=none" in dmarc_value:
@@ -258,6 +263,17 @@ class DNSEnumerationModule(BaseModule):
                 category="dns_configuration",
                 remediation="Configure at least 2 nameservers for redundancy.",
             ))
+        else:
+            # Detect single-provider NS concentration for resiliency awareness
+            providers = set(r.value.split(".")[-2:] for r in ns_records if r.value)
+            if len(providers) == 1:
+                result.add_finding(Finding(
+                    title="Nameservers Single Provider",
+                    description="All nameservers appear to be hosted by a single provider",
+                    severity=Severity.INFO,
+                    category="dns_configuration",
+                    remediation="Consider distributing NS across multiple providers to reduce single point of failure.",
+                ))
         
         # Check for nameservers in same /24 (simplified check)
         ns_values = [r.value.rstrip('.') for r in ns_records]

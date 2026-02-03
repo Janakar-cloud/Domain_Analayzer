@@ -47,79 +47,60 @@ class CSVReporter(BaseReporter):
         
         # Write header
         writer.writerow([
-            "Domain",
-            "Scan Timestamp",
-            "Subdomains Count",
-            "Resolved IPs",
-            "TLS CN",
-            "TLS Issuer",
-            "TLS Expires",
-            "TLS Expired",
-            "WHOIS Registrar",
-            "WHOIS Created",
-            "WHOIS Expires",
-            "Domain Age (days)",
-            "SSLLabs Grade",
-            "Severity Score",
-            "Critical Findings",
-            "High Findings",
-            "Medium Findings",
-            "Low Findings",
-            "Info Findings",
-            "Takeover Candidate",
-            "Errors",
+            "domain",
+            "CN",
+            "O",
+            "Issuer CN",
+            "Issuer O",
+            "Not Before",
+            "Not After",
+            "cert_error",
+            "A",
+            "CNAME",
+            "NS",
+            "MX",
+            "TXT",
+            "SPF",
+            "DMARC",
         ])
         
         # Write data rows
         for result in results:
-            # Count findings by severity
-            severity_counts = {
-                "critical": 0,
-                "high": 0,
-                "medium": 0,
-                "low": 0,
-                "info": 0,
-            }
-            for finding in result.findings:
-                severity_counts[finding.severity.value] += 1
-            
             # Extract certificate info
             tls_cn = result.tls_certificate.subject_cn if result.tls_certificate else ""
+            tls_org = result.tls_certificate.organization if result.tls_certificate else ""
             tls_issuer = result.tls_certificate.issuer if result.tls_certificate else ""
+            tls_issuer_org = result.tls_certificate.issuer_org if result.tls_certificate else ""
+            tls_not_before = result.tls_certificate.not_before.isoformat() if result.tls_certificate and result.tls_certificate.not_before else ""
             tls_expires = result.tls_certificate.not_after.isoformat() if result.tls_certificate and result.tls_certificate.not_after else ""
-            tls_expired = result.tls_certificate.is_expired if result.tls_certificate else ""
+            tls_error = result.cert_error or ""
+
+            def _records(record_type: str) -> str:
+                values = [r.value for r in result.dns_records if r.record_type == record_type]
+                return "; ".join(values)
             
-            # Extract WHOIS info
-            whois_registrar = result.whois_info.registrar if result.whois_info else ""
-            whois_created = result.whois_info.creation_date.isoformat() if result.whois_info and result.whois_info.creation_date else ""
-            whois_expires = result.whois_info.expiration_date.isoformat() if result.whois_info and result.whois_info.expiration_date else ""
-            domain_age = result.whois_info.domain_age_days if result.whois_info else ""
-            
-            # Extract SSLLabs grade
-            ssllabs_grade = result.ssllabs_result.grade if result.ssllabs_result else ""
+            a_records = _records("A")
+            cname_records = _records("CNAME")
+            ns_records = _records("NS")
+            mx_records = _records("MX")
+            txt_records = _records("TXT")
             
             writer.writerow([
                 result.domain,
-                result.scan_timestamp.isoformat(),
-                len(result.subdomains),
-                "; ".join(result.resolved_ips),
                 tls_cn,
+                tls_org,
                 tls_issuer,
+                tls_issuer_org,
+                tls_not_before,
                 tls_expires,
-                tls_expired,
-                whois_registrar,
-                whois_created,
-                whois_expires,
-                domain_age,
-                ssllabs_grade,
-                result.severity_score,
-                severity_counts["critical"],
-                severity_counts["high"],
-                severity_counts["medium"],
-                severity_counts["low"],
-                severity_counts["info"],
-                result.is_takeover_candidate,
-                "; ".join(result.errors) if result.errors else "",
+                tls_error,
+                a_records,
+                cname_records,
+                ns_records,
+                mx_records,
+                txt_records,
+                result.spf_record or "",
+                result.dmarc_record or "",
             ])
         
         return output.getvalue()
