@@ -4,6 +4,12 @@ This project is designed for internal use by security teams to continuously moni
 
 > Build provenance: Delivered by a 3‑engineer team (backend, frontend, infra) using Copilot Pro assistance over ~5 working days.
 
+| Area      | Lead Role | Scope Highlights                              |
+|-----------|-----------|-----------------------------------------------|
+| Backend   | Dev 1     | CT/DNS/TLS modules, threat intel, reporters   |
+| Frontend  | Dev 2     | Streamlit UI, UX flow, result visualizations  |
+| Infra     | Dev 3     | Config, logging, rate limits, packaging/CI    |
+
 ## Features
 - Certificate Transparency Enumeration — Discover hidden subdomains via crt.sh.
 - DNS Record Collection — A, AAAA, CNAME, NS, MX, TXT, SPF, DMARC.
@@ -64,4 +70,3 @@ python cli.py report --output csv html
 
 Disclaimer
 This tool is intended for authorized internal security testing only. Do not use it against domains you do not own or manage. Misuse may violate laws or provider terms of service.
-
