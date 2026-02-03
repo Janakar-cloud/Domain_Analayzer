@@ -194,6 +194,7 @@ class TestCSVReporter:
         
         expected_headers = [
             "Domain", "Scan Timestamp", "Subdomains Count", "Resolved IPs",
+            "SPF", "DMARC",
             "TLS CN", "TLS Issuer", "TLS Expires", "TLS Expired",
             "WHOIS Registrar", "WHOIS Created", "WHOIS Expires", "Domain Age (days)",
             "SSLLabs Grade", "Severity Score", "Critical Findings", "High Findings",
@@ -216,6 +217,8 @@ class TestCSVReporter:
         example_row = next(r for r in rows if r["Domain"] == "example.com")
         assert example_row["Subdomains Count"] == "2"
         assert example_row["TLS CN"] == "example.com"
+        assert example_row["SPF"] == ""
+        assert example_row["DMARC"] == ""
         assert example_row["Critical Findings"] == "1"
         assert example_row["Medium Findings"] == "1"
 

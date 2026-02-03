@@ -55,7 +55,8 @@ class TLSInspectionModule(BaseModule):
                 self._analyze_certificate(cert_info, domain, result)
                 break  # Use first successful port
             else:
-                result.add_error(f"Could not retrieve TLS certificate from {domain}:{port}")
+                result.cert_error = f"Could not retrieve TLS certificate from {domain}:{port}"
+                result.add_error(result.cert_error)
 
     def _get_certificate(self, domain: str, port: int = 443) -> Optional[TLSCertificate]:
         """

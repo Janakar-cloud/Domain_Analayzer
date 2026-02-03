@@ -222,6 +222,7 @@ class DomainResult:
     dns_records: List[DNSRecord] = field(default_factory=list)
     resolved_ips: List[str] = field(default_factory=list)
     tls_certificate: Optional[TLSCertificate] = None
+    cert_error: Optional[str] = None
     
     # Enrichment results
     whois_info: Optional[WHOISInfo] = None
@@ -243,6 +244,8 @@ class DomainResult:
     errors: List[str] = field(default_factory=list)
     scan_duration_seconds: Optional[float] = None
     modules_executed: List[str] = field(default_factory=list)
+    spf_record: Optional[str] = None
+    dmarc_record: Optional[str] = None
 
     def add_finding(self, finding: Finding) -> None:
         """Add a finding to the results."""
@@ -285,6 +288,7 @@ class DomainResult:
             "dns_records": [r.to_dict() for r in self.dns_records],
             "resolved_ips": self.resolved_ips,
             "tls_certificate": self.tls_certificate.to_dict() if self.tls_certificate else None,
+            "cert_error": self.cert_error,
             "whois_info": self.whois_info.to_dict() if self.whois_info else None,
             "ssllabs_result": self.ssllabs_result.to_dict() if self.ssllabs_result else None,
             "threat_intel": [t.to_dict() for t in self.threat_intel],
@@ -298,6 +302,8 @@ class DomainResult:
             "modules_executed": self.modules_executed,
             "severity_score": self.severity_score,
             "highest_severity": self.highest_severity.value if self.highest_severity else None,
+            "spf_record": self.spf_record,
+            "dmarc_record": self.dmarc_record,
         }
 
     @classmethod
