@@ -84,12 +84,19 @@ class TLSInspectionModule(BaseModule):
                     
         except socket.timeout:
             self.logger.warning(f"Timeout connecting to {domain}:{port}")
+            return None
         except socket.gaierror as e:
             self.logger.warning(f"DNS resolution failed for {domain}: {e}")
+            return None
         except ssl.SSLError as e:
             self.logger.warning(f"SSL error for {domain}:{port}: {e}")
+            if isinstance(e, ssl.CertificateError):
+                # Capture hostname mismatch explicitly
+                return self._build_error_certificate(domain)
+            return None
         except ConnectionRefusedError:
             self.logger.warning(f"Connection refused to {domain}:{port}")
+            return None
         except Exception as e:
             self.logger.error(f"Error getting certificate from {domain}:{port}: {e}")
         
@@ -353,6 +360,24 @@ class TLSInspectionModule(BaseModule):
                 return True
         
         return False
+
+    def _build_error_certificate(self, domain: str, message: str) -> TLSCertificate:
+        """Construct a minimal TLSCertificate for error contexts."""
+        return TLSCertificate(
+            subject_cn=domain,
+            issuer="",
+            organization="",
+            issuer_org="",
+            san=[],
+            not_before=None,
+            not_after=None,
+            serial_number=None,
+            signature_algorithm=None,
+            key_type=None,
+            key_size=None,
+            is_expired=False,
+            days_until_expiry=None,
+        )
 
     def _wildcard_match(self, pattern: str, domain: str) -> bool:
         """
