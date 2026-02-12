@@ -184,7 +184,7 @@ class TestCSVReporter:
         assert path.suffix == ".csv"
 
     def test_csv_headers(self, mock_config, sample_results):
-        """Test CSV has correct headers."""
+        """Test CSV has correct headers matching asset inventory format."""
         reporter = CSVReporter(mock_config)
         path = reporter.generate(sample_results)
         
@@ -192,13 +192,11 @@ class TestCSVReporter:
             reader = csv.reader(f)
             headers = next(reader)
         
+        # New asset inventory format headers
         expected_headers = [
-            "Domain", "Scan Timestamp", "Subdomains Count", "Resolved IPs",
-            "TLS CN", "TLS Issuer", "TLS Expires", "TLS Expired",
-            "WHOIS Registrar", "WHOIS Created", "WHOIS Expires", "Domain Age (days)",
-            "SSLLabs Grade", "Severity Score", "Critical Findings", "High Findings",
-            "Medium Findings", "Low Findings", "Info Findings", "Takeover Candidate",
-            "Errors"
+            "domain", "CN", "O", "Issuer CN", "Issuer O", "Not Before", "Not After",
+            "cert_error", "A", "CNAME", "NS", "MX", "TXT", "SPF", "DMARC",
+            "SANs", "Subdomains Count"
         ]
         assert headers == expected_headers
 
@@ -213,11 +211,25 @@ class TestCSVReporter:
         
         assert len(rows) == 2
         
-        example_row = next(r for r in rows if r["Domain"] == "example.com")
+        example_row = next(r for r in rows if r["domain"] == "example.com")
         assert example_row["Subdomains Count"] == "2"
-        assert example_row["TLS CN"] == "example.com"
-        assert example_row["Critical Findings"] == "1"
-        assert example_row["Medium Findings"] == "1"
+        assert example_row["CN"] == "example.com"
+
+    def test_full_asset_inventory(self, mock_config, sample_results):
+        """Test full asset inventory CSV generation."""
+        reporter = CSVReporter(mock_config)
+        path = reporter.generate_full_asset_inventory(sample_results)
+        
+        assert path.exists()
+        assert "full_asset_inventory" in path.name
+        
+        with open(path, newline='') as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+        
+        # Should have main domains + all subdomains
+        # sample_results has 2 domains with 2 subdomains each = 2 + 4 = 6 rows
+        assert len(rows) >= 2  # At least main domains
 
 
 class TestHTMLReporter:

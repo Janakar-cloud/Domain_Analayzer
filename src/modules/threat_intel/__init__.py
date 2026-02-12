@@ -6,6 +6,7 @@ from .alienvault_otx import AlienVaultOTXModule
 from .virustotal import VirusTotalModule
 from .urlscan import URLScanModule
 from .criminalip import CriminalIPModule
+from .local_reputation import LocalReputationModule
 
 __all__ = [
     "BaseThreatIntelModule",
@@ -14,4 +15,5 @@ __all__ = [
     "VirusTotalModule",
     "URLScanModule",
     "CriminalIPModule",
+    "LocalReputationModule",
 ]

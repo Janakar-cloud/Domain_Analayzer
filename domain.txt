@@ -1,0 +1,765 @@
+Domains Intelligence
+
+Feedback : 
+1. High‑level UX and layout
+Add a top summary panel with: Overall Risk Score, Domains Scanned, Open Critical/High Issues, and Last Scan Time for the selected domain.
+
+
+The second tab “DNS results” is not showing the results properly, which needs to be checked
+The Findings needs to be highlighted in Red (Critical \ High), Orange (Medium \ Low), No Risks (Legitimate domains \ Green)
+Add a Reputation tab and consolidate the reputation from sites like Abuseipdb and sites which I have shared earlier. Abuse/Blacklist checks from the feeds.
+Please give Hyperlinks to the Findings to show the results in the tabs directly.
+
+
+2. Recommended main tabs/sections per domain
+Security Posture (summary of all scores + top 3 risky findings with hyperlinks to the results).
+Hide the SPF, DMARC, DKIM results, as they are not the priority currently
+
+
+For Info - Nameserver configuration - Rename as DNS Configuration
+
+
+Certificate (expiry Date, Issued by, Issued to)
+
+
+Reputation, Exposure & Attack Surface - Apart from consolidated reputation subdomains, if the Domains are prone to subdomain takeover risks, is a potential dangling DNS domain.
+
+Objective : 
+
+Objective is to identify Domains with DNS issues
+Dangling Domains
+Domains \ URL’s without Authentication and sharing sensitive data
+Domains \ URL’s for whom the Whois information is not registered to the corporate company
+Domains \ URL’s whose certificates have expired
+Domains \ URL’s whose home page is not organized
+Modify the existing Project by adding additional information from the lookups.
+Integrate more lookups to get the required details and threat information through API’s
+
+Phase 1 : Single Domain results
+How it can be hosted in internal system and as a Web application
+Internal Server requirements
+Phase 2 : Only cloud.com is provided, the tool to perform a passive scan to identify the full list of Sub-domains (May be 500 subdomains or 1000 sub-domains) - Input \ Output (Spreadsheets, Command line results, Websites etc)
+Phase 3 : Gemini AI Integration and Google MCP Server
+
+Lookup sites : 
+
+Whois information : 
+https://whois.domaintools.com/
+https://i.secai.ai/research
+https://www.godaddy.com/whois
+
+Details from these sites are as follows : 
+Company details
+Registrant details
+How many days old
+Location details
+
+DNS Information : 
+DIG DNS : https://toolbox.googleapps.com/apps/dig/#ANY/ (qname, CNAME, Service Provider, CNAME, AAAA, ANY)
+https://mxtoolbox.com/DnsLookup.aspx 
+
+qname, CNAME, Service Provider, CNAME, AAAA, ANY details
+Company details
+Registrant details
+Library: `dnspython` (for DIG functionality)
+
+Domain Certificate scanner : 
+
+https://www.ssllabs.com/ssltest/
+
+Details from the above site which are required are 
+
+Certificate expiry date (Only show if the Certificate is expired)
+Rating of the Domain \ URL
+Any other issues of the Domain \ URL
+Library: Python `ssl` and `OpenSSL` module
+Logic: Extract `NotAfter` date, `Issuer`, and `Subject`
+
+Domain \ IP reputation : 
+
+https://www.abuseipdb.com/
+https://i.secai.ai/research
+https://www.virustotal.com/
+https://www.criminalip.io/
+https://otx.alienvault.com/
+AbuseIPDB API: Checks if the A-record IP is malicious
+AlienVault OTX API: Checks for pulse indicators
+VirusTotal API: Checks URL/Domain reputation
+
+URL Scan reputation and screenshot : 
+https://urlscan.io/
+https://www.browserling.com/
+
+Redirection check for the URL : 
+https://redirectdetective.com/
+
+Process : 
+
+https://www.hackerone.com/blog/guide-subdomain-takeovers
+https://www.hackerone.com/blog/guide-subdomain-takeovers
+https://medium.com/@paritoshblogs/reconnaissance-with-eyewitness-a-practical-guide-for-red-teaming-9589d6498076
+
+
+Tentative Python Program (Needs to be enhanced) : 
+
+import time
+import re
+import csv
+import socket
+import ssl
+import requests
+import dns.resolver
+import dns.rdatatype
+from typing import Set, Dict
+from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.x509.oid import NameOID
+
+# =============================
+# Configuration
+# =============================
+TARGET_DOMAIN = "cloud.com"
+BASE_URL = "https://crt.sh/"
+HEADERS = {"User-Agent": "Mozilla/5.0 (CT-Research; security-research)"}
+OFFSET_STEP = 100
+MAX_PAGES = 50
+REQUEST_DELAY = 2.5
+CERT_THREADS = 20
+DNS_TIMEOUT = 5.0
+
+DOMAIN_REGEX = re.compile(
+    rf"(?:\*\.)?[a-z0-9.-]+\.{re.escape(TARGET_DOMAIN)}"
+)
+
+# =============================
+# Fetch crt.sh page
+# =============================
+def fetch_page_html(page_offset: int) -> str:
+    params = {"q": TARGET_DOMAIN, "offset": page_offset}
+    for attempt in range(5):
+        try:
+            response = requests.get(BASE_URL, params=params, headers=HEADERS, timeout=30)
+            response.raise_for_status()
+            return response.text
+        except requests.RequestException as exc:
+            print(f"[!] crt.sh error offset={page_offset}: {exc}")
+            time.sleep(3 + attempt)
+
+    raise RuntimeError(f"Failed fetching crt.sh offset={page_offset}")
+
+# =============================
+# Extract domains
+# =============================
+def extract_domains_from_html(html_text: str) -> Set[str]:
+    domain_results: Set[str] = set()
+    soup = BeautifulSoup(html_text, "html.parser")
+
+    for row in soup.find_all("tr"):
+        cells = row.find_all("td")
+        if not cells:
+            continue
+
+        text_blob = "\n".join(cells[0].stripped_strings).lower()
+        for match in DOMAIN_REGEX.findall(text_blob):
+            domain_results.add(match.replace("*.", ""))
+
+    return domain_results
+
+# =============================
+# Scrape crt.sh
+# =============================
+def scrape_crtsh_domains() -> Set[str]:
+    collected_domains: Set[str] = set()
+    empty_pages = 0
+
+    for page_index in range(MAX_PAGES):
+        offset = page_index * OFFSET_STEP
+        print(f"[*] Fetching crt.sh offset={offset}")
+
+        try:
+            html_text = fetch_page_html(offset)
+            page_domains = extract_domains_from_html(html_text)
+            new_domains = page_domains - collected_domains
+
+            if not new_domains:
+                empty_pages += 1
+            else:
+                empty_pages = 0
+                collected_domains.update(new_domains)
+                for item in sorted(new_domains):
+                    print(item)
+
+            if empty_pages >= 2:
+                break
+
+            time.sleep(REQUEST_DELAY)
+
+        except RuntimeError as exc:
+            print(f"[!] Scrape error: {exc}")
+
+    return collected_domains
+
+# =============================
+# DNS lookup (TYPE-SAFE)
+# =============================
+def fetch_dns_records(target_fqdn: str) -> Dict[str, str]:
+    resolver = dns.resolver.Resolver()
+    resolver.timeout = DNS_TIMEOUT
+    resolver.lifetime = DNS_TIMEOUT
+
+    dns_records = {
+        "A": "",
+        "CNAME": "",
+        "NS": "",
+        "MX": "",
+        "TXT": "",
+        "SPF": "",
+        "DMARC": ""
+    }
+
+    try:
+        dns_records["A"] = ",".join(
+            r.address for r in resolver.resolve(target_fqdn, dns.rdatatype.A)
+        )
+    except dns.exception.DNSException:
+        pass
+
+    try:
+        dns_records["CNAME"] = ",".join(
+            str(r.target).rstrip(".")
+            for r in resolver.resolve(target_fqdn, dns.rdatatype.CNAME)
+        )
+    except dns.exception.DNSException:
+        pass
+
+    try:
+        dns_records["NS"] = ",".join(
+            str(r.target).rstrip(".")
+            for r in resolver.resolve(target_fqdn, dns.rdatatype.NS)
+        )
+    except dns.exception.DNSException:
+        pass
+
+    try:
+        dns_records["MX"] = ",".join(
+            str(r.exchange).rstrip(".")
+            for r in resolver.resolve(target_fqdn, dns.rdatatype.MX)
+        )
+    except dns.exception.DNSException:
+        pass
+
+    try:
+        txt_entries = [
+            b"".join(r.strings).decode()
+            for r in resolver.resolve(target_fqdn, dns.rdatatype.TXT)
+        ]
+        dns_records["TXT"] = "; ".join(txt_entries)
+        dns_records["SPF"] = "; ".join(t for t in txt_entries if t.lower().startswith("v=spf1"))
+    except dns.exception.DNSException:
+        pass
+
+    try:
+        dmarc_name = f"_dmarc.{target_fqdn}"
+        dmarc_entries = [
+            b"".join(r.strings).decode()
+            for r in resolver.resolve(dmarc_name, dns.rdatatype.TXT)
+        ]
+        dns_records["DMARC"] = "; ".join(dmarc_entries)
+    except dns.exception.DNSException:
+        pass
+
+    return dns_records
+
+# =============================
+# Certificate fetch
+# =============================
+def fetch_certificate_data(target_fqdn: str) -> Dict[str, str]:
+    cert_data = {
+        "domain": target_fqdn,
+        "CN": "",
+        "O": "",
+        "Issuer CN": "",
+        "Issuer O": "",
+        "Not Before": "",
+        "Not After": "",
+        "cert_error": ""
+    }
+
+    try:
+        context = ssl.create_default_context()
+        with socket.create_connection((target_fqdn, 443), timeout=5) as sock:
+            with context.wrap_socket(sock, server_hostname=target_fqdn) as tls:
+                cert_bin = tls.getpeercert(binary_form=True)
+
+        cert = x509.load_der_x509_certificate(cert_bin, default_backend())
+
+        cert_data["CN"] = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
+        org = cert.subject.get_attributes_for_oid(NameOID.ORGANIZATION_NAME)
+        cert_data["O"] = org[0].value if org else ""
+
+        issuer_cn = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)
+        cert_data["Issuer CN"] = issuer_cn[0].value if issuer_cn else ""
+
+        issuer_o = cert.issuer.get_attributes_for_oid(NameOID.ORGANIZATION_NAME)
+        cert_data["Issuer O"] = issuer_o[0].value if issuer_o else ""
+
+        cert_data["Not Before"] = cert.not_valid_before.isoformat()
+        cert_data["Not After"] = cert.not_valid_after.isoformat()
+
+    except (ssl.SSLError, socket.error, ValueError) as exc:
+        cert_data["cert_error"] = str(exc)
+
+    return cert_data
+
+# =============================
+# Main
+# =============================
+if __name__ == "__main__":
+    domain_set = scrape_crtsh_domains()
+
+    output_file = f"{TARGET_DOMAIN}_full_asset_inventory.csv"
+    with open(output_file, "w", newline="", encoding="utf-8") as fh:
+        fieldnames = [
+            "domain", "CN", "O", "Issuer CN", "Issuer O",
+            "Not Before", "Not After", "cert_error",
+            "A", "CNAME", "NS", "MX", "TXT", "SPF", "DMARC"
+        ]
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+
+        with ThreadPoolExecutor(max_workers=CERT_THREADS) as pool:
+            futures = {pool.submit(fetch_certificate_data, d): d for d in domain_set}
+
+            for future in as_completed(futures):
+                domain_value = futures[future]
+                cert_row = future.result()
+                dns_row = fetch_dns_records(domain_value)
+                writer.writerow({**cert_row, **dns_row})
+                print(f"[+] Processed {domain_value}")
+
+    print(f"[✓] Results written to {output_file}")
+
+==
+
+Updated code
+
+import time
+import re
+import csv
+import socket
+import ssl
+import logging  # added logging instead of print
+import requests
+import dns.resolver
+import dns.rdatatype
+from typing import Set, Dict
+from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.x509.oid import NameOID, ExtensionOID  # // added ExtensionOID for SAN
+
+# =============================
+# Configuration
+# =============================
+TARGET_DOMAIN = "cloud.com"
+BASE_URL = "https://crt.sh/"
+HEADERS = {"User-Agent": "Mozilla/5.0 (CT-Research; security-research)"}
+OFFSET_STEP = 100
+MAX_PAGES = 50
+REQUEST_DELAY = 2.5
+CERT_THREADS = 20
+DNS_TIMEOUT = 5.0
+
+# // added logging config, no behaviour change
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+
+DOMAIN_REGEX = re.compile(
+    rf"(?:\*\.)?[a-z0-9.-]+\.{re.escape(TARGET_DOMAIN)}"
+)
+
+# =============================
+# Fetch crt.sh page
+# =============================
+def fetch_page_html(page_offset: int) -> str:
+    params = {"q": TARGET_DOMAIN, "offset": page_offset}
+    for attempt in range(5):
+        try:
+            response = requests.get(
+                BASE_URL,
+                params=params,
+                headers=HEADERS,
+                timeout=30
+            )
+            response.raise_for_status()
+            return response.text
+        except requests.RequestException as exc:
+            logging.warning(f"crt.sh error offset={page_offset}: {exc}")
+            time.sleep(3 + attempt)
+
+    raise RuntimeError(f"Failed fetching crt.sh offset={page_offset}")
+
+# =============================
+# Extract domains
+# =============================
+def extract_domains_from_html(html_text: str) -> Set[str]:
+    domain_results: Set[str] = set()
+    soup = BeautifulSoup(html_text, "html.parser")
+
+    for row in soup.find_all("tr"):
+        cells = row.find_all("td")
+        if not cells:
+            continue
+
+        text_blob = "\n".join(cells[0].stripped_strings).lower()
+        for match in DOMAIN_REGEX.findall(text_blob):
+            domain_results.add(match.replace("*.", ""))
+
+    return domain_results
+
+# =============================
+# Scrape crt.sh
+# =============================
+def scrape_crtsh_domains() -> Set[str]:
+    collected_domains: Set[str] = set()
+    empty_pages = 0
+
+    for page_index in range(MAX_PAGES):
+        offset = page_index * OFFSET_STEP
+        logging.info(f"Fetching crt.sh offset={offset}")
+
+        try:
+            html_text = fetch_page_html(offset)
+            page_domains = extract_domains_from_html(html_text)
+            new_domains = page_domains - collected_domains
+
+            if not new_domains:
+                empty_pages += 1
+            else:
+                empty_pages = 0
+                collected_domains.update(new_domains)
+                for item in sorted(new_domains):
+                    logging.info(f"Found domain: {item}")
+
+            if empty_pages >= 2:
+                break
+
+            time.sleep(REQUEST_DELAY)
+
+        except RuntimeError as exc:
+            logging.error(f"Scrape error: {exc}")
+
+    return collected_domains
+
+# =============================
+# DNS lookup
+# =============================
+def fetch_dns_records(
+    target_fqdn: str,
+    resolver: dns.resolver.Resolver
+) -> Dict[str, str]:
+    dns_records = {
+        "A": "",
+        "AAAA": "",      # // added ipv6 support
+        "CNAME": "",
+        "NS": "",
+        "MX": "",
+        "TXT": "",
+        "SPF": "",
+        "DMARC": ""
+    }
+
+    try:
+        dns_records["A"] = ",".join(
+            r.address for r in resolver.resolve(target_fqdn, dns.rdatatype.A)
+        )
+    except dns.exception.DNSException:
+        pass
+
+    try:
+        dns_records["AAAA"] = ",".join(
+            r.address for r in resolver.resolve(target_fqdn, dns.rdatatype.AAAA)
+        )
+    except dns.exception.DNSException:
+        pass
+
+    try:
+        dns_records["CNAME"] = ",".join(
+            str(r.target).rstrip(".")
+            for r in resolver.resolve(target_fqdn, dns.rdatatype.CNAME)
+        )
+    except dns.exception.DNSException:
+        pass
+
+    try:
+        dns_records["NS"] = ",".join(
+            str(r.target).rstrip(".")
+            for r in resolver.resolve(target_fqdn, dns.rdatatype.NS)
+        )
+    except dns.exception.DNSException:
+        pass
+
+    try:
+        dns_records["MX"] = ",".join(
+            str(r.exchange).rstrip(".")
+            for r in resolver.resolve(target_fqdn, dns.rdatatype.MX)
+        )
+    except dns.exception.DNSException:
+        pass
+
+    try:
+        txt_entries = [
+            b"".join(r.strings).decode()
+            for r in resolver.resolve(target_fqdn, dns.rdatatype.TXT)
+        ]
+        dns_records["TXT"] = "; ".join(txt_entries)
+        dns_records["SPF"] = "; ".join(
+            t for t in txt_entries if t.lower().startswith("v=spf1")
+        )
+    except dns.exception.DNSException:
+        pass
+
+    try:
+        dmarc_name = f"_dmarc.{target_fqdn}"
+        dmarc_entries = [
+            b"".join(r.strings).decode()
+            for r in resolver.resolve(dmarc_name, dns.rdatatype.TXT)
+        ]
+        dns_records["DMARC"] = "; ".join(dmarc_entries)
+    except dns.exception.DNSException:
+        pass
+
+    return dns_records
+
+# =============================
+# Certificate fetch
+# =============================
+def fetch_certificate_data(target_fqdn: str) -> Dict[str, str]:
+    cert_data = {
+        "domain": target_fqdn,
+        "CN": "",
+        "O": "",
+        "SANs": "",        # // added SAN column
+        "Issuer CN": "",
+        "Issuer O": "",
+        "Not Before": "",
+        "Not After": "",
+        "cert_error": ""
+    }
+
+    try:
+        context = ssl.create_default_context()
+        with socket.create_connection((target_fqdn, 443), timeout=5) as sock:
+            with context.wrap_socket(sock, server_hostname=target_fqdn) as tls:
+                cert_bin = tls.getpeercert(binary_form=True)
+
+        cert = x509.load_der_x509_certificate(cert_bin, default_backend())
+
+        cert_data["CN"] = cert.subject.get_attributes_for_oid(
+            NameOID.COMMON_NAME
+        )[0].value
+
+        org = cert.subject.get_attributes_for_oid(
+            NameOID.ORGANIZATION_NAME
+        )
+        cert_data["O"] = org[0].value if org else ""
+
+        issuer_cn = cert.issuer.get_attributes_for_oid(
+            NameOID.COMMON_NAME
+        )
+        cert_data["Issuer CN"] = issuer_cn[0].value if issuer_cn else ""
+
+        issuer_o = cert.issuer.get_attributes_for_oid(
+            NameOID.ORGANIZATION_NAME
+        )
+        cert_data["Issuer O"] = issuer_o[0].value if issuer_o else ""
+
+        cert_data["Not Before"] = cert.not_valid_before.isoformat()
+        cert_data["Not After"] = cert.not_valid_after.isoformat()
+
+        # // SAN extraction added safely
+        try:
+            san_ext = cert.extensions.get_extension_for_oid(
+                ExtensionOID.SUBJECT_ALTERNATIVE_NAME
+            )
+            cert_data["SANs"] = ",".join(
+                san_ext.value.get_values_for_type(x509.DNSName)
+            )
+        except x509.ExtensionNotFound:
+            pass
+
+    except (ssl.SSLError, socket.error, ValueError) as exc:
+        cert_data["cert_error"] = str(exc)
+
+    return cert_data
+
+# =============================
+# Main
+# =============================
+if __name__ == "__main__":
+    domain_set = scrape_crtsh_domains()
+
+    output_file = f"{TARGET_DOMAIN}_full_asset_inventory.csv"
+
+    # // reuse resolver for performance, logic same
+    resolver = dns.resolver.Resolver()
+    resolver.timeout = DNS_TIMEOUT
+    resolver.lifetime = DNS_TIMEOUT
+
+    with open(output_file, "w", newline="", encoding="utf-8") as fh:
+        fieldnames = [
+            "domain", "CN", "O", "SANs",
+            "Issuer CN", "Issuer O",
+            "Not Before", "Not After", "cert_error",
+            "A", "AAAA", "CNAME", "NS", "MX",
+            "TXT", "SPF", "DMARC"
+        ]
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+
+        with ThreadPoolExecutor(max_workers=CERT_THREADS) as pool:
+            futures = {
+                pool.submit(fetch_certificate_data, d): d
+                for d in domain_set
+            }
+
+            for future in as_completed(futures):
+                domain_value = futures[future]
+                cert_row = future.result()
+                dns_row = fetch_dns_records(domain_value, resolver)
+                writer.writerow({**cert_row, **dns_row})
+                logging.info(f"Processed {domain_value}")
+
+    logging.info(f"Results written to {output_file}")
+
+Overview
+This Python tool performs automated external asset discovery for a given domain by combining Certificate Transparency (CT) log analysis, live TLS certificate inspection, Subject alternative names(SANs) and DNS record enumeration. It helps security teams identify internet-facing assets, understand certificate usage, and evaluate DNS and email security posture.
+The script is designed to work cross-platform (Windows, Linux, macOS) without requiring an external OpenSSL binary.
+What This Tool Does
+Certificate Transparency Enumeration
+ The script queries crt.sh to retrieve certificates issued for the target domain. From these certificates, it extracts fully qualified domain names (FQDNs), including subdomains that may not be documented internally.
+
+
+Domain Normalization and Deduplication
+ Wildcard entries are normalized and all domains are deduplicated to ensure each asset is processed once.
+
+
+Live TLS Certificate Inspection
+ For each discovered domain, the script:
+Connects to port 443
+Performs a TLS handshake
+Retrieves the server certificate
+Subject Alternative Names(SANs)
+Extracts:
+Common Name (CN)
+Organization (O)
+Issuer Common Name
+Issuer Organization
+Certificate validity start date
+Certificate expiration date
+
+
+DNS Enumeration
+ For each domain, the script performs DNS lookups and collects:
+
+
+A records (IPv4 addresses)
+CNAME records
+NS records (authoritative name servers)
+MX records (mail servers)
+TXT records
+SPF policy (parsed from TXT records)
+DMARC policy (queried via _dmarc subdomain)
+
+
+Error Handling
+ TLS and DNS errors are captured and recorded per domain without stopping the workflow.
+
+
+CSV Export
+ All results are written into a single CSV file, where each row represents one domain with certificate and DNS metadata.
+
+
+Use Cases
+External attack surface discovery
+Shadow IT and forgotten subdomain identification
+Certificate lifecycle monitoring
+Email security posture assessment (SPF / DMARC)
+Phishing and impersonation risk analysis
+SOC and threat-hunting investigations
+Continuous external asset inventory
+Dependencies
+The following Python packages are required:
+requests
+beautifulsoup4
+dnspython
+cryptography
+Standard library modules used (no installation required):
+time
+re
+csv
+socket
+ssl
+concurrent.futures
+typing
+Installation
+Ensure Python 3.9 or newer is installed.
+Install required dependencies:
+pip install requests beautifulsoup4 dnspython cryptography
+Configuration
+Edit the following variables at the top of the script as needed:
+TARGET_DOMAIN
+ The root domain you want to enumerate (example: cloud.com)
+MAX_PAGES
+ Number of crt.sh pages to query
+CERT_THREADS
+ Number of parallel threads used for TLS certificate fetching
+REQUEST_DELAY
+ Delay between crt.sh page requests to avoid rate limiting
+DNS_TIMEOUT
+ Timeout for DNS queries
+How to Run
+Run the script using:
+python script_name.py
+After execution completes, a CSV file will be created in the same directory.
+Example output file name:
+
+
+cloud.com_full_asset_inventory.csv
+CSV Output Columns
+Certificate Fields:
+domain
+CN
+O
+Issuer CN
+Issuer O
+Not Before
+Not After
+cert_error
+DNS Fields:
+A
+CNAME
+NS
+MX
+TXT
+SPF
+DMARC
+Notes and Limitations
+Only domains with active TLS on port 443 will return certificate data
+DNS records may be empty if not configured
+crt.sh availability and rate limiting may affect results
+This tool primarily uses passive certificate transparency data, combined with low impact active TLS and DNS validation.
+Legal and Ethical Use
+This tool should only be used on domains you own, manage, or have explicit permission to analyze.
+Reference links : 
+Tools : 
+
+https://github.com/projectdiscovery/nuclei
+https://projectdiscovery.io/nuclei
+https://github.com/haccer/subjack
+https://github.com/RedSiege/EyeWitness

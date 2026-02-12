@@ -11,6 +11,7 @@ modules:
   ct_enumeration:
     enabled: true
     timeout: 30
+    max_subdomains: 500  # Cap processed subdomains to reduce runtime
   
   dns_enumeration:
     enabled: true
@@ -22,7 +23,7 @@ modules:
       - MX
       - TXT
       - SOA
-    timeout: 10
+    timeout: 3  # Lower DNS timeout for faster queries
     nameservers:
       - 8.8.8.8
       - 8.8.4.4
@@ -41,8 +42,10 @@ modules:
   
   ssllabs:
     enabled: true
-    timeout: 300  # SSLLabs can take a while
+    timeout: 60  # Overall request timeout
     max_age: 24  # hours - use cached results if available
+    poll_interval_seconds: 5
+    max_attempts: 12  # ~60s max wait for SSL Labs
   
   threat_intel:
     abuseipdb:
@@ -62,6 +65,9 @@ modules:
       enabled: true
       visibility: public  # public or private
       store_screenshots: true
+
+    local_reputation:
+      enabled: true  # Local heuristics module (no external APIs)
   
   redirect_analysis:
     enabled: true

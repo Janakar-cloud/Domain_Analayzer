@@ -45,9 +45,12 @@ class CTEnumerationModule(BaseModule):
         if subdomains:
             # Filter and clean subdomains
             valid_subdomains = self._filter_subdomains(subdomains, domain)
-            result.subdomains.extend(valid_subdomains)
+            # Apply configurable cap to reduce processing time
+            max_subdomains = int(self.get_setting("max_subdomains", 500))
+            limited = list(valid_subdomains)[:max_subdomains]
+            result.subdomains.extend(limited)
             
-            self.logger.info(f"Found {len(valid_subdomains)} unique subdomains for {domain}")
+            self.logger.info(f"Found {len(valid_subdomains)} unique subdomains for {domain}; processing {len(limited)}")
             
             # Add informational finding
             result.add_finding(Finding(

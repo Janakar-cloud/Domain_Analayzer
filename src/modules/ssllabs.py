@@ -89,10 +89,12 @@ class SSLLabsModule(BaseModule):
             # Poll until complete
             status = response.get("status")
             attempts = 0
-            max_attempts = 60  # 5 minutes with 5-second intervals
+            # Make polling tunable to reduce scan time
+            poll_interval = int(self.get_setting("poll_interval_seconds", 5))
+            max_attempts = int(self.get_setting("max_attempts", 12))  # ~60s default
             
             while status not in ("READY", "ERROR") and attempts < max_attempts:
-                time.sleep(5)
+                time.sleep(max(1, poll_interval))
                 self.rate_limit("ssllabs")
                 
                 response = self._api_request("analyze", {
@@ -114,7 +116,7 @@ class SSLLabsModule(BaseModule):
                 return None
             
             if status != "READY":
-                self.logger.warning(f"SSL Labs timed out for {domain}")
+                self.logger.warning(f"SSL Labs timed out for {domain} (status={status})")
                 return None
             
             return self._parse_result(response)

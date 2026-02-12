@@ -24,6 +24,7 @@ from .modules.threat_intel import (
     VirusTotalModule,
     URLScanModule,
     CriminalIPModule,
+    LocalReputationModule,
 )
 from .reporters import JSONReporter, CSVReporter, HTMLReporter
 
@@ -45,6 +46,7 @@ class Scanner:
         RedirectAnalysisModule,   # Check redirects
         TakeoverDetectionModule,  # Check for takeover (uses DNS/subdomains)
         # Threat intelligence modules (use resolved IPs)
+        LocalReputationModule,    # Local-only heuristics, runs without API keys
         AbuseIPDBModule,
         AlienVaultOTXModule,
         VirusTotalModule,
@@ -248,6 +250,15 @@ class Scanner:
                     path = self.reporters[fmt].generate(results)
                     generated.append(path)
                     self.logger.info(f"Generated {fmt} report: {path}")
+                    
+                    # Also generate full asset inventory CSV
+                    if fmt == "csv":
+                        try:
+                            inventory_path = self.reporters[fmt].generate_full_asset_inventory(results)
+                            generated.append(inventory_path)
+                            self.logger.info(f"Generated full asset inventory: {inventory_path}")
+                        except Exception as e:
+                            self.logger.error(f"Failed to generate asset inventory: {e}")
                 except Exception as e:
                     self.logger.error(f"Failed to generate {fmt} report: {e}")
             else:
