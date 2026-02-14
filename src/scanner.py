@@ -18,6 +18,7 @@ from .modules.whois_lookup import WHOISModule
 from .modules.ssllabs import SSLLabsModule
 from .modules.redirect_analysis import RedirectAnalysisModule
 from .modules.takeover_detection import TakeoverDetectionModule
+from .modules.content_scanner import ContentScannerModule
 from .modules.threat_intel import (
     AbuseIPDBModule,
     AlienVaultOTXModule,
@@ -44,6 +45,7 @@ class Scanner:
         WHOISModule,              # WHOIS lookup
         SSLLabsModule,            # SSL Labs assessment
         RedirectAnalysisModule,   # Check redirects
+        ContentScannerModule,     # Homepage/shallow content scan (inbuilt-only)
         TakeoverDetectionModule,  # Check for takeover (uses DNS/subdomains)
         # Threat intelligence modules (use resolved IPs)
         LocalReputationModule,    # Local-only heuristics, runs without API keys

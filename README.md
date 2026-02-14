@@ -11,6 +11,12 @@ This project is designed for internal use by security teams to continuously moni
 - Threat Intelligence APIs — AbuseIPDB, AlienVault OTX, VirusTotal, CriminalIP.
 - URLScan.io — Reputation checks and screenshots.
 - Redirect Chain Analysis — Detect excessive hops, insecure redirects.
+ABUSEIPDB_KEY=...
+OTX_KEY=...
+VT_KEY=...
+CRIMINALIP_KEY=...
+URLSCAN_KEY=...
+DOMAIN_INTEL_API=http://127.0.0.1:8000
 - Subdomain Takeover Heuristics — Identify dangling CNAMEs pointing to SaaS providers.
 - Reporting — Export results to CSV/JSON/HTML with severity scoring and evidence snapshots.
 
@@ -20,6 +26,28 @@ This project is designed for internal use by security teams to continuously moni
 - Rate limiting: Built‑in backoff and concurrency caps to avoid bans.
 - Audit logging: Structured JSON logs for traceability.
 - Legal use: Only run against domains you own/manage or have explicit permission to test.
+## Production Deployment (Windows VM)
+- Copy repo to VM and open PowerShell in the repo directory.
+- Use the deployment script:
+	- Setup venv and install deps:
+		.\\scripts\\deploy.ps1 -Setup
+	- Start backend API (FastAPI on port 8000):
+		.\\scripts\\deploy.ps1 -StartBackend
+	- Start frontend (Streamlit on port 8501):
+		.\\scripts\\deploy.ps1 -StartFrontend
+
+### Required API Keys
+- AbuseIPDB: `ABUSEIPDB_KEY`
+- AlienVault OTX: `OTX_KEY`
+- VirusTotal: `VT_KEY`
+- CriminalIP: `CRIMINALIP_KEY`
+- URLScan (optional for private scans): `URLSCAN_KEY`
+Notes: Local reputation module runs without external keys. SSL Labs requires no key.
+
+### Repo Cleanup
+- Generated artifacts are ignored by .gitignore (`output/`, `evidence/`, `logs/`).
+- Run the cleanup script to remove local artifacts:
+	.\\scripts\\cleanup_repo.ps1
 
 ## Getting Started
 # Prerequisites

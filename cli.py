@@ -163,6 +163,17 @@ Examples:
         action="store_true",
         help="Skip threat intelligence lookups",
     )
+    exec_group.add_argument(
+        "--no-fetch",
+        action="store_true",
+        help="Skip homepage content fetching/scanning",
+    )
+    exec_group.add_argument(
+        "--rules",
+        dest="rules_path",
+        metavar="FILE",
+        help="Path to local_rules.yaml for content scanning",
+    )
     
     # General options
     parser.add_argument(
@@ -214,6 +225,10 @@ def main():
         if args.no_threat_intel:
             for ti_module in ["abuseipdb", "alienvault_otx", "virustotal", "urlscan"]:
                 config._config.setdefault("modules", {}).setdefault("threat_intel", {}).setdefault(ti_module, {})["enabled"] = False
+        if args.no_fetch:
+            config._config.setdefault("modules", {}).setdefault("content_scanner", {})["enabled"] = False
+        if args.rules_path:
+            config._config.setdefault("rules", {})["path"] = args.rules_path
         
         # Set log level
         if args.verbose:

@@ -31,6 +31,28 @@ with st.sidebar:
     skip_threat_intel = st.checkbox("Skip Threat Intel", value=True)
     workers = st.number_input("Workers", min_value=1, max_value=50, value=5, step=1)
 
+    st.subheader("Performance")
+    fast_mode = st.checkbox("Fast Mode (no skipping)", value=True, help="Runs all modules with shorter timeouts/polling and tighter content caps.")
+    deep_scan = st.checkbox("Deep content scan (crawl shallow links)", value=True)
+    shallow_link_limit = st.slider("Shallow link limit", min_value=1, max_value=100, value=20, step=1)
+    request_timeout_ms = st.slider("Content request timeout (ms)", min_value=1000, max_value=15000, value=8000, step=500)
+
+    with st.expander("Advanced Tuning"):
+        st.caption("Control per-module timeouts and SSL Labs polling without disabling modules.")
+        c1, c2 = st.columns(2)
+        with c1:
+            ct_timeout = st.slider("CT timeout (s)", 3, 15, 5)
+            ct_max_subdomains = st.slider("CT max subdomains", 100, 1000, 500, step=50)
+            dns_timeout = st.slider("DNS timeout (s)", 3, 15, 5)
+            tls_timeout = st.slider("TLS timeout (s)", 3, 15, 5)
+        with c2:
+            whois_timeout = st.slider("WHOIS timeout (s)", 5, 20, 8)
+            redirect_timeout = st.slider("Redirect timeout (s)", 3, 15, 5)
+            ssllabs_timeout = st.slider("SSL Labs HTTP timeout (s)", 5, 15, 8)
+            ssllabs_poll_interval = st.slider("SSL Labs poll interval (s)", 1, 5, 2)
+            ssllabs_max_attempts = st.slider("SSL Labs max attempts", 3, 10, 5)
+            ssllabs_max_age = st.slider("SSL Labs max cache age (hours)", 24, 168, 48, step=24)
+
 
 domains_input = st.text_area(
     "Domains (one per line)",
@@ -63,7 +85,29 @@ if run_button:
             "output_formats": output_formats,
             "skip_modules": skip_modules,
             "workers": int(workers),
+            # Runtime tuning for content scanner
+            "content_scanner_deep_scan": bool(deep_scan),
+            "content_scanner_link_limit": int(shallow_link_limit),
+            "content_scanner_timeout_ms": int(request_timeout_ms),
+            # Fast mode for all modules (keeps them enabled)
+            "fast_mode": bool(fast_mode),
+            # Advanced tuning overrides
+            "ct_timeout": int(ct_timeout),
+            "ct_max_subdomains": int(ct_max_subdomains),
+            "dns_timeout": int(dns_timeout),
+            "tls_timeout": int(tls_timeout),
+            "whois_timeout": int(whois_timeout),
+            "redirect_timeout": int(redirect_timeout),
+            "ssllabs_timeout": int(ssllabs_timeout),
+            "ssllabs_poll_interval_seconds": int(ssllabs_poll_interval),
+            "ssllabs_max_attempts": int(ssllabs_max_attempts),
+            "ssllabs_max_age": int(ssllabs_max_age),
         }
+
+        # Tighten content caps further when fast mode is enabled
+        if fast_mode:
+            payload["content_scanner_link_limit"] = min(payload["content_scanner_link_limit"], 10)
+            payload["content_scanner_timeout_ms"] = min(payload["content_scanner_timeout_ms"], 6000)
 
         with st.spinner("Running scan..."):
             try:
@@ -103,6 +147,21 @@ if run_button:
                 c2.metric("Open Critical/High", data["summary"]["severity_counts"]["critical"] + data["summary"]["severity_counts"]["high"])                
                 c3.metric("Total Findings", data["summary"]["total_findings"])                
                 c4.metric("Last Scan Time", last_scan_time or "-")
+
+                # Content Scanner summary
+                total_hits = 0
+                rule_counts = {}
+                for r in results:
+                    for f in r.get("findings", []):
+                        if f.get("category") == "content_scan":
+                            hits = (f.get("raw_data") or {}).get("hits", [])
+                            total_hits += len(hits)
+                            for h in hits:
+                                rid = h.get("rule_id") or "unknown"
+                                rule_counts[rid] = rule_counts.get(rid, 0) + 1
+                if total_hits:
+                    top_rule = max(rule_counts.items(), key=lambda x: x[1])[0]
+                    st.info(f"Content Scanner: {total_hits} hits (top rule: {top_rule})")
 
                 # Top 3 risky findings
                 st.markdown("### Top Risky Findings")
@@ -192,6 +251,34 @@ if run_button:
                                         f"</div>", unsafe_allow_html=True)
                             if f.get("evidence"):
                                 st.code(f["evidence"])
+                            # Highlight Content Scanner hits with rule IDs and confidence
+                            if f.get("category") == "content_scan":
+                                hits = (f.get("raw_data") or {}).get("hits", [])
+                                if hits:
+                                    st.write("Detected items:")
+                                    # Confidence color mapping and compact HTML table
+                                    def conf_badge(conf: str) -> str:
+                                        color = {"high": "#dc3545", "medium": "#fd7e14", "low": "#6c757d"}.get(conf, "#6c757d")
+                                        return f"<span style='background:{color};color:#fff;border-radius:8px;padding:2px 6px;font-size:12px;'>{conf}</span>"
+
+                                    rows = []
+                                    for h in hits[:10]:
+                                        token = (h.get("token") or "")
+                                        token_disp = token[:40] + ("…" if len(token) > 40 else "")
+                                        rows.append(
+                                            f"<tr><td>{h.get('rule_id')}</td><td>{conf_badge(h.get('confidence','low'))}</td><td>{h.get('weight')}</td><td><code>{token_disp}</code></td></tr>"
+                                        )
+                                    table_html = (
+                                        "<table style='width:100%;border-collapse:collapse;'>"
+                                        "<thead><tr>"
+                                        "<th style='text-align:left;border-bottom:1px solid #ddd;'>rule</th>"
+                                        "<th style='text-align:left;border-bottom:1px solid #ddd;'>confidence</th>"
+                                        "<th style='text-align:left;border-bottom:1px solid #ddd;'>weight</th>"
+                                        "<th style='text-align:left;border-bottom:1px solid #ddd;'>token</th>"
+                                        "</tr></thead><tbody>"
+                                        + "".join(rows) + "</tbody></table>"
+                                    )
+                                    st.markdown(table_html, unsafe_allow_html=True)
                             if f.get("remediation"):
                                 st.write("Remediation:")
                                 st.markdown(f["remediation"])

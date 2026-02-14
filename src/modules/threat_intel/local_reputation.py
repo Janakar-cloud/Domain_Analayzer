@@ -130,6 +130,20 @@ class LocalReputationModule(BaseModule):
             categories.append("TakeoverRisk")
             evidence.append("Potential subdomain takeover risk detected")
 
+        # Content scanner findings influence
+        for f in result.findings:
+            if f.category == "content_scan":
+                # Map severity to additive score
+                if f.severity == Severity.HIGH:
+                    score += 20
+                    categories.append("SensitiveContentHigh")
+                elif f.severity == Severity.MEDIUM:
+                    score += 10
+                    categories.append("SensitiveContentMedium")
+                elif f.severity == Severity.LOW:
+                    score += 5
+                    categories.append("SensitiveContentLow")
+
         # Cap score at 100
         score = min(100, score)
         return score, categories, evidence

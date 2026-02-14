@@ -41,6 +41,7 @@ class Finding:
             "evidence": self.evidence,
             "remediation": self.remediation,
             "references": self.references,
+            "raw_data": self.raw_data,
         }
 
 

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 import whois
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
 from ..core.domain import DomainResult, Finding, Severity, WHOISInfo
 from .base import BaseModule
@@ -48,7 +49,17 @@ class WHOISModule(BaseModule):
             WHOISInfo object or None
         """
         try:
-            w = whois.whois(domain)
+            # Run WHOIS in a thread to enforce a timeout on slow registries
+            def _do_lookup():
+                return whois.whois(domain)
+
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_do_lookup)
+                try:
+                    w = future.result(timeout=self.timeout)
+                except FuturesTimeout:
+                    self.logger.warning(f"WHOIS lookup timed out for {domain} after {self.timeout}s")
+                    return None
             
             if not w or not w.domain_name:
                 return None

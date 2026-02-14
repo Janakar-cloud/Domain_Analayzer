@@ -10,8 +10,8 @@ targets:
 modules:
   ct_enumeration:
     enabled: true
-    timeout: 30
-    max_subdomains: 500  # Cap processed subdomains to reduce runtime
+    timeout: 6
+    max_subdomains: 400  # Cap processed subdomains to reduce runtime
   
   dns_enumeration:
     enabled: true
@@ -23,7 +23,7 @@ modules:
       - MX
       - TXT
       - SOA
-    timeout: 3  # Lower DNS timeout for faster queries
+    timeout: 5  # DNS timeout per query
     nameservers:
       - 8.8.8.8
       - 8.8.4.4
@@ -31,21 +31,21 @@ modules:
   
   tls_inspection:
     enabled: true
-    timeout: 15
+    timeout: 6
     ports:
       - 443
     check_expiry_days: 30  # Warn if cert expires within X days
   
   whois_lookup:
     enabled: true
-    timeout: 15
+    timeout: 9
   
   ssllabs:
     enabled: true
-    timeout: 60  # Overall request timeout
-    max_age: 24  # hours - use cached results if available
-    poll_interval_seconds: 5
-    max_attempts: 12  # ~60s max wait for SSL Labs
+    timeout: 7  # Overall request timeout
+    max_age: 48  # hours - prefer cached results to reduce wait
+    poll_interval_seconds: 2
+    max_attempts: 3  # Aggressive cap; use cache when available
   
   threat_intel:
     abuseipdb:
@@ -72,9 +72,17 @@ modules:
   redirect_analysis:
     enabled: true
     max_redirects: 10
-    timeout: 15
+    timeout: 6
     verify_ssl: true  # SSL verification enabled by default for security
   
+  content_scanner:
+    enabled: true
+    timeout_seconds: 6
+    max_redirects: 10
+    max_body_bytes: 1048576
+    shallow_links_limit: 10
+    deep_scan: true
+
   takeover_detection:
     enabled: true
 
@@ -122,6 +130,10 @@ proxy:
 
 # Custom user agent
 user_agent: "DomainIntelligence/1.0 (Security Assessment Tool)"
+
+# Local rules file (allow/deny lists, sensitive patterns)
+rules:
+  path: ./local_rules.yaml
 
 # Email/SMTP settings (configure here for email reports)
 email:

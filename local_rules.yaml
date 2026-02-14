@@ -1,0 +1,38 @@
+# Local rules configuration for ContentScanner and scoring
+
+allowlist:
+  - example.org
+denylist:
+  - bad.example.com
+
+sensitive_patterns:
+  - id: aws_access_key
+    regex: 'AKIA[0-9A-Z]{16}'
+    weight: 20
+  - id: jwt_token
+    regex: '[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'
+    weight: 20
+  - id: api_key_like
+    regex: '(?i)(api[_-]?key|authorization|bearer)\s*[:=]\s*["\''][A-Za-z0-9_\-]{16,}["\'']'
+    weight: 15
+  - id: secret_like
+    regex: '(?i)(secret|token|password)\s*[:=]\s*["\''][^"\']{12,}["\'']'
+    weight: 15
+  - id: slack_webhook
+    regex: 'https://hooks\.slack\.com/services/T[0-9A-Z]{9}/B[0-9A-Z]{9}/[A-Za-z0-9]{24}'
+    weight: 20
+  - id: google_api_key
+    regex: 'AIza[0-9A-Za-z\-_]{35}'
+    weight: 15
+  - id: stripe_live_secret
+    regex: 'sk_live_[0-9a-zA-Z]{24}'
+    weight: 20
+  - id: github_pat
+    regex: 'ghp_[A-Za-z0-9]{36}'
+    weight: 20
+
+risky_paths:
+  - /login
+  - /admin
+  - /api
+  - /auth
