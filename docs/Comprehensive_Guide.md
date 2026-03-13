@@ -21,18 +21,18 @@ This guide explains how to install, configure, run, and operate Domain Intellige
 3. Verify:
 
 ```powershell
-python --version
-pip --version
+py --version
+py -m pip --version
 ```
 
 ### 3.2 Create Virtual Environment and Install Dependencies
 From the repo root:
 
 ```powershell
-python -m venv .venv
+py -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip wheel setuptools
-pip install -r requirements.txt
+py -m pip install --upgrade pip wheel setuptools
+py -m pip install -r requirements.txt
 ```
 
 ## 4. Configuration
@@ -44,6 +44,7 @@ pip install -r requirements.txt
 - For inbuilt-only operation, leave `.env.local` empty or omit it.
 - If you later enable external providers, add keys in the repo root `.env.local`:
   - ABUSEIPDB_KEY, OTX_KEY, VT_KEY, CRIMINALIP_KEY, URLSCAN_KEY
+  - GOOGLE_SAFE_BROWSING_KEY, SECURITYTRAILS_KEY
 
 ### 4.3 Proxy Support
 - In [config.yaml](../config.yaml), set `proxy.enabled: true` and specify `http`/`https` URLs for corporate proxies.
@@ -52,7 +53,7 @@ pip install -r requirements.txt
 ### 5.1 Backend API (FastAPI)
 
 ```powershell
-python -m uvicorn src.server:app --host 127.0.0.1 --port 8000 --reload
+py -m uvicorn src.server:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Health check: open http://127.0.0.1:8000/health → returns `{ "status": "ok" }`.
@@ -60,18 +61,18 @@ Health check: open http://127.0.0.1:8000/health → returns `{ "status": "ok" }`
 ### 5.2 Frontend UI (Streamlit)
 
 ```powershell
-streamlit run src/webui/app.py --server.port 8501
+py -m streamlit run src/webui/app.py --server.port 8501
 ```
 
-Open http://127.0.0.1:8501, enter domains (one per line), enable “Fast Mode (no skipping)” for quicker results, set `Workers` (e.g., 10–12), and run a scan.
+Open http://127.0.0.1:8501, enter domains (one per line), and run analysis. The UI uses a fixed internal scan profile (scan options are hidden).
 
 ## 6. Command-Line Interface (CLI)
 Run one-off scans or batch mode:
 
 ```powershell
-python cli.py --domain example.com
-python cli.py --input domains.txt
-python cli.py report --output csv html
+py cli.py --domain example.com
+py cli.py --input domains.txt
+py cli.py report --output csv html
 ```
 
 ## 7. Performance Tuning (No Skipping)
@@ -145,32 +146,21 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/scan -ContentType "app
 - **SSL Labs delays**: enable Fast Mode, lower `ssllabs_max_attempts`, increase `ssllabs_max_age` to prefer cached results.
 - **YAML rules parse**: use proper quoting in `local_rules.yaml` for regexes; check logs for warnings.
 - **Proxies**: enable in [config.yaml](../config.yaml) and verify outbound access to crt.sh/SSL Labs.
-- **Tests**: run `pytest -q` to validate.
+- **Tests**: run `py -m pytest -q` to validate.
 
 ## 13. Runbook Quick Actions
 - Start everything:
 
 ```powershell
-.\scriptsuild.ps1 # optional if present
-.\scriptsuild.ps1 -Setup
-.\scriptsuild.ps1 -StartBackend
-.\scriptsuild.ps1 -StartFrontend
+.\scripts\deploy.ps1 -Setup
+.\scripts\deploy.ps1 -StartBackend
+.\scripts\deploy.ps1 -StartFrontend
 ```
 
 - Cleanup artifacts:
 
 ```powershell
-.\scriptsackup.ps1 # optional
-.\scriptsackup.ps1 -Cleanup
-```
-
-Or use provided scripts:
-
-```powershell
-.\scripts\\deploy.ps1 -Setup
-.\scripts\\deploy.ps1 -StartBackend
-.\scripts\\deploy.ps1 -StartFrontend
-.\scripts\\cleanup_repo.ps1
+.\scripts\cleanup_repo.ps1
 ```
 
 ## 14. Appendix

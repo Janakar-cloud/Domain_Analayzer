@@ -17,22 +17,22 @@ Domain Intelligence is a Windows‑friendly Python application that helps securi
 - Create and activate a virtual environment, then install dependencies:
 
 ```powershell
-python -m venv .venv
+py -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+py -m pip install -r requirements.txt
 ```
 
 - Start the backend API (FastAPI) and the frontend (Streamlit):
 
 ```powershell
 # Backend (port 8000)
-python -m uvicorn src.server:app --host 127.0.0.1 --port 8000 --reload
+py -m uvicorn src.server:app --host 127.0.0.1 --port 8000 --reload
 
 # Frontend (port 8501)
-streamlit run src/webui/app.py --server.port 8501
+py -m streamlit run src/webui/app.py --server.port 8501
 ```
 
-- Use the UI at http://127.0.0.1:8501. Enter domains (one per line), choose options, and run a scan.
+- Use the UI at http://127.0.0.1:8501. Enter domains (one per line) and run analysis. The UI uses a fixed internal scan profile (scan options are hidden).
 - Or call the API directly:
 
 ```powershell
@@ -105,19 +105,19 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/scan -ContentType "app
 - Single domain:
 
 ```powershell
-python cli.py --domain example.com
+py cli.py --domain example.com
 ```
 
 - Bulk domains from file:
 
 ```powershell
-python cli.py --input domains.txt
+py cli.py --input domains.txt
 ```
 
 - Generate reports for previous results:
 
 ```powershell
-python cli.py report --output csv html
+py cli.py report --output csv html
 ```
 
 ## Deployment (Windows VM)
@@ -140,6 +140,8 @@ python cli.py report --output csv html
 - VirusTotal: VT_KEY
 - CriminalIP: CRIMINALIP_KEY
 - URLScan: URLSCAN_KEY (needed for private scans)
+- Google Safe Browsing: GOOGLE_SAFE_BROWSING_KEY
+- SecurityTrails (Passive DNS): SECURITYTRAILS_KEY
 - Note: Local reputation and content scanning run without external keys; SSL Labs requires no key.
 
 ## Repo Cleanup

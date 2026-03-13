@@ -57,14 +57,28 @@ modules:
     
     virustotal:
       enabled: true
+      url_scan_enabled: true
+      url_scan_limit: 2
+      submit_on_cache_miss: false
     
     criminalip:
       enabled: false  # Enable when API key is configured
+
+    google_safe_browsing:
+      enabled: true
+      threat_types:
+        - MALWARE
+        - SOCIAL_ENGINEERING
+        - UNWANTED_SOFTWARE
+        - POTENTIALLY_HARMFUL_APPLICATION
     
     urlscan:
       enabled: true
       visibility: public  # public or private
       store_screenshots: true
+
+    passive_dns:
+      enabled: true
 
     local_reputation:
       enabled: true  # Local heuristics module (no external APIs)
@@ -95,8 +109,10 @@ rate_limits:
   abuseipdb: 60
   alienvault_otx: 10
   virustotal: 4
+  google_safe_browsing: 30
   criminalip: 10
   urlscan: 2
+  securitytrails: 10
 
 # Concurrency settings
 concurrency:

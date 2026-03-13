@@ -21,6 +21,15 @@ class BaseThreatIntelModule(BaseModule):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Threat intel modules are configured under modules.threat_intel.<name> in config.yaml.
+        # Keep top-level module config as an override path for runtime API toggles.
+        nested_cfg = self.config.get(f"modules.threat_intel.{self.name}", {}) or {}
+        top_level_cfg = self.config.get_module_config(self.name) or {}
+        merged_cfg = dict(nested_cfg)
+        merged_cfg.update(top_level_cfg)
+        if merged_cfg:
+            self._module_config = merged_cfg
+
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": self.config.user_agent,

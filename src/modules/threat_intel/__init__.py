@@ -7,6 +7,8 @@ from .virustotal import VirusTotalModule
 from .urlscan import URLScanModule
 from .criminalip import CriminalIPModule
 from .local_reputation import LocalReputationModule
+from .google_safe_browsing import GoogleSafeBrowsingModule
+from .passive_dns import PassiveDNSModule
 
 __all__ = [
     "BaseThreatIntelModule",
@@ -16,4 +18,6 @@ __all__ = [
     "URLScanModule",
     "CriminalIPModule",
     "LocalReputationModule",
+    "GoogleSafeBrowsingModule",
+    "PassiveDNSModule",
 ]

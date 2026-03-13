@@ -26,6 +26,8 @@ from .modules.threat_intel import (
     URLScanModule,
     CriminalIPModule,
     LocalReputationModule,
+    GoogleSafeBrowsingModule,
+    PassiveDNSModule,
 )
 from .reporters import JSONReporter, CSVReporter, HTMLReporter
 
@@ -52,8 +54,10 @@ class Scanner:
         AbuseIPDBModule,
         AlienVaultOTXModule,
         VirusTotalModule,
+        GoogleSafeBrowsingModule,
         CriminalIPModule,
         URLScanModule,
+        PassiveDNSModule,
     ]
 
     def __init__(self, config: Optional[Config] = None, config_path: Optional[str] = None):

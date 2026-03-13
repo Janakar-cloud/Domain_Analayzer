@@ -54,6 +54,8 @@ class Config:
             "virustotal": os.getenv("VT_KEY", ""),
             "criminalip": os.getenv("CRIMINALIP_KEY", ""),
             "urlscan": os.getenv("URLSCAN_KEY", ""),
+            "google_safe_browsing": os.getenv("GOOGLE_SAFE_BROWSING_KEY", os.getenv("GSB_KEY", "")),
+            "securitytrails": os.getenv("SECURITYTRAILS_KEY", ""),
         }
 
     def get(self, key: str, default: Any = None) -> Any:
