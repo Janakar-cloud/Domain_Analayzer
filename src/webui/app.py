@@ -430,7 +430,25 @@ def severity_color(sev: str) -> str:
 
 
 def parse_domains(text: str) -> List[str]:
-    return [d.strip() for d in text.splitlines() if d.strip() and not d.strip().startswith("#")]
+    normalized: List[str] = []
+    seen = set()
+
+    for raw in text.splitlines():
+        candidate = raw.strip()
+        if not candidate or candidate.startswith("#"):
+            continue
+
+        candidate = re.sub(r"^https?://", "", candidate, flags=re.IGNORECASE)
+        candidate = candidate.split("/", 1)[0]
+        candidate = candidate.split(":", 1)[0]
+        candidate = candidate.strip().lower().rstrip(".")
+
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        normalized.append(candidate)
+
+    return normalized
 
 
 def parse_iso(value: Optional[str]) -> Optional[datetime]:
@@ -914,9 +932,16 @@ def render_tabs(data: Dict[str, Any]) -> None:
         for result in results:
             domain = result.get("domain", "")
             email_rows = extract_cert_email_rows(result)
+            cert_payload = result.get("tls_certificate") or {}
             st.markdown(f"#### {domain}")
             if not email_rows:
-                st.info("No certificate email address extracted")
+                if not cert_payload:
+                    st.warning("TLS certificate data unavailable for this domain")
+                else:
+                    st.info(
+                        "No email address found in certificate subject/issuer/SAN fields. "
+                        "Most public website certificates do not include email addresses."
+                    )
             else:
                 st.table(email_rows)
 

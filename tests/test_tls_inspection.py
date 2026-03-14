@@ -67,3 +67,20 @@ def test_parse_certificate_extracts_structured_email_fields() -> None:
     assert parsed.san_emails == ["security@example.com"]
     assert parsed.email_addresses == ["admin@example.com", "security@example.com"]
     assert parsed.san == ["example.com", "www.example.com"]
+
+
+def test_parse_certificate_uses_binary_der_when_decoded_dict_is_empty() -> None:
+    cfg = Config()
+    module = TLSInspectionModule(cfg, rate_limiter=None)
+
+    parsed = module._parse_certificate({}, _build_test_certificate_der())
+
+    assert parsed.subject_cn == "example.com"
+    assert parsed.issuer == "example.com"
+    assert parsed.organization == "Example Org"
+    assert parsed.san == ["example.com", "www.example.com"]
+    assert parsed.subject_emails == ["admin@example.com"]
+    assert parsed.san_emails == ["security@example.com"]
+    assert parsed.email_addresses == ["admin@example.com", "security@example.com"]
+    assert parsed.signature_algorithm is not None
+    assert parsed.serial_number is not None

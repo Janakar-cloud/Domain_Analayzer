@@ -3,7 +3,7 @@
 import socket
 import ssl
 from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.domain import DomainResult, Finding, Severity, TLSCertificate
 from .base import BaseModule
@@ -75,10 +75,12 @@ class TLSInspectionModule(BaseModule):
             
             with socket.create_connection((domain, port), timeout=self.timeout) as sock:
                 with context.wrap_socket(sock, server_hostname=domain) as ssock:
-                    cert = ssock.getpeercert(binary_form=False)
+                    cert = ssock.getpeercert(binary_form=False) or {}
                     cert_binary = ssock.getpeercert(binary_form=True)
-                    
-                    if cert:
+
+                    # With CERT_NONE, Python may return {} for decoded cert fields.
+                    # If DER bytes are available, we can still parse full certificate details.
+                    if cert_binary:
                         return self._parse_certificate(cert, cert_binary)
                     
         except socket.timeout:
@@ -105,26 +107,34 @@ class TLSInspectionModule(BaseModule):
         Returns:
             TLSCertificate object
         """
+        binary_details = self._extract_crypto_details(cert_binary)
+
         # Extract subject CN
         subject = dict(x[0] for x in cert.get("subject", []))
-        subject_cn = subject.get("commonName", "")
+        subject_cn = subject.get("commonName") or binary_details.get("subject_cn") or ""
         subject_emails = self._extract_ssl_name_emails(cert.get("subject", []))
         
         # Extract issuer
         issuer = dict(x[0] for x in cert.get("issuer", []))
-        issuer_cn = issuer.get("commonName", "")
-        issuer_org = issuer.get("organizationName", "")
+        issuer_cn = issuer.get("commonName") or binary_details.get("issuer_cn") or ""
+        issuer_org = issuer.get("organizationName") or binary_details.get("issuer_org") or ""
         issuer_emails = self._extract_ssl_name_emails(cert.get("issuer", []))
         
         # Extract organization
-        org = subject.get("organizationName", "")
+        org = subject.get("organizationName") or binary_details.get("organization") or ""
         
         # Extract SANs
         san_list, san_emails = self._extract_ssl_san_entries(cert.get("subjectAltName", []))
+        san_list = self._merge_unique_strings(san_list, binary_details.get("san_dns", []))
         
         # Parse dates
         not_before = self._parse_cert_date(cert.get("notBefore"))
         not_after = self._parse_cert_date(cert.get("notAfter"))
+
+        if not not_before:
+            not_before = binary_details.get("not_before")
+        if not not_after:
+            not_after = binary_details.get("not_after")
         
         # Calculate expiry
         now = datetime.now(timezone.utc)
@@ -138,17 +148,15 @@ class TLSInspectionModule(BaseModule):
             days_until_expiry = (not_after - now).days
         
         # Extract serial number
-        serial = cert.get("serialNumber", "")
+        serial = cert.get("serialNumber") or binary_details.get("serial_number") or ""
         
-        # Get signature algorithm, key info, and structured email fields from binary cert if possible.
-        (
-            sig_alg,
-            key_type,
-            key_size,
-            binary_subject_emails,
-            binary_issuer_emails,
-            binary_san_emails,
-        ) = self._extract_crypto_details(cert_binary)
+        # Get structured fields extracted from binary cert.
+        sig_alg = binary_details.get("signature_algorithm")
+        key_type = binary_details.get("key_type")
+        key_size = binary_details.get("key_size")
+        binary_subject_emails = binary_details.get("subject_emails", [])
+        binary_issuer_emails = binary_details.get("issuer_emails", [])
+        binary_san_emails = binary_details.get("san_emails", [])
 
         subject_emails = self._merge_unique_strings(subject_emails, binary_subject_emails)
         issuer_emails = self._merge_unique_strings(issuer_emails, binary_issuer_emails)
@@ -175,10 +183,13 @@ class TLSInspectionModule(BaseModule):
             days_until_expiry=days_until_expiry,
         )
 
-    def _parse_cert_date(self, date_str: Optional[str]) -> Optional[datetime]:
+    def _parse_cert_date(self, date_str: Any) -> Optional[datetime]:
         """Parse certificate date string."""
         if not date_str:
             return None
+
+        if isinstance(date_str, datetime):
+            return date_str
         
         try:
             # Format: 'Sep 10 00:00:00 2024 GMT'
@@ -222,16 +233,33 @@ class TLSInspectionModule(BaseModule):
     def _extract_crypto_details(
         self,
         cert_binary: bytes,
-    ) -> Tuple[Optional[str], Optional[str], Optional[int], List[str], List[str], List[str]]:
+    ) -> Dict[str, Any]:
         """
-        Extract cryptographic information and structured email fields from binary certificate.
+        Extract certificate details from binary DER certificate data.
 
         Args:
             cert_binary: Binary certificate data
 
         Returns:
-            Tuple of signature/key details plus subject, issuer, and SAN email lists.
+            Dictionary containing signature, key, identity, dates, SANs, and email fields.
         """
+        details: Dict[str, Any] = {
+            "signature_algorithm": None,
+            "key_type": None,
+            "key_size": None,
+            "subject_cn": "",
+            "issuer_cn": "",
+            "issuer_org": "",
+            "organization": "",
+            "serial_number": "",
+            "not_before": None,
+            "not_after": None,
+            "san_dns": [],
+            "subject_emails": [],
+            "issuer_emails": [],
+            "san_emails": [],
+        }
+
         try:
             from cryptography import x509
             from cryptography.hazmat.primitives.asymmetric import rsa, ec, dsa
@@ -240,7 +268,7 @@ class TLSInspectionModule(BaseModule):
             cert = x509.load_der_x509_certificate(cert_binary)
             
             # Get signature algorithm
-            sig_alg = cert.signature_algorithm_oid._name
+            sig_alg = cert.signature_algorithm_oid._name or cert.signature_algorithm_oid.dotted_string
             
             # Get key info
             public_key = cert.public_key()
@@ -258,6 +286,35 @@ class TLSInspectionModule(BaseModule):
                 key_type = type(public_key).__name__
                 key_size = None
 
+            def _first_name_value(name: x509.Name, oid: x509.ObjectIdentifier) -> str:
+                attrs = name.get_attributes_for_oid(oid)
+                if not attrs:
+                    return ""
+                return str(attrs[0].value).strip()
+
+            subject_cn = _first_name_value(cert.subject, NameOID.COMMON_NAME)
+            issuer_cn = _first_name_value(cert.issuer, NameOID.COMMON_NAME)
+            issuer_org = _first_name_value(cert.issuer, NameOID.ORGANIZATION_NAME)
+            org = _first_name_value(cert.subject, NameOID.ORGANIZATION_NAME)
+
+            if hasattr(cert, "not_valid_before_utc"):
+                not_before = cert.not_valid_before_utc
+            else:
+                not_before = cert.not_valid_before
+
+            if hasattr(cert, "not_valid_after_utc"):
+                not_after = cert.not_valid_after_utc
+            else:
+                not_after = cert.not_valid_after
+            if not_before and not_before.tzinfo is None:
+                not_before = not_before.replace(tzinfo=timezone.utc)
+            if not_after and not_after.tzinfo is None:
+                not_after = not_after.replace(tzinfo=timezone.utc)
+
+            serial_number = format(cert.serial_number, "X")
+
+            san_dns: List[str] = []
+
             subject_emails = self._merge_unique_strings(
                 [attr.value.strip().lower() for attr in cert.subject.get_attributes_for_oid(NameOID.EMAIL_ADDRESS)]
             )
@@ -268,20 +325,42 @@ class TLSInspectionModule(BaseModule):
             san_emails: List[str] = []
             try:
                 san_extension = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+                san_dns = self._merge_unique_strings(
+                    [value.strip() for value in san_extension.value.get_values_for_type(x509.DNSName)]
+                )
                 san_emails = self._merge_unique_strings(
                     [value.strip().lower() for value in san_extension.value.get_values_for_type(x509.RFC822Name)]
                 )
             except x509.ExtensionNotFound:
+                san_dns = []
                 san_emails = []
-            
-            return sig_alg, key_type, key_size, subject_emails, issuer_emails, san_emails
+
+            details.update(
+                {
+                    "signature_algorithm": sig_alg,
+                    "key_type": key_type,
+                    "key_size": key_size,
+                    "subject_cn": subject_cn,
+                    "issuer_cn": issuer_cn,
+                    "issuer_org": issuer_org,
+                    "organization": org,
+                    "serial_number": serial_number,
+                    "not_before": not_before,
+                    "not_after": not_after,
+                    "san_dns": san_dns,
+                    "subject_emails": subject_emails,
+                    "issuer_emails": issuer_emails,
+                    "san_emails": san_emails,
+                }
+            )
+            return details
             
         except ImportError:
             self.logger.debug("cryptography library not available for detailed cert parsing")
-            return None, None, None, [], [], []
+            return details
         except Exception as e:
             self.logger.debug(f"Error extracting crypto info: {e}")
-            return None, None, None, [], [], []
+            return details
 
     def _merge_unique_strings(self, *groups: List[str]) -> List[str]:
         """Merge string groups while preserving order and removing duplicates."""

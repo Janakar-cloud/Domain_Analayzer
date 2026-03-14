@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from .scanner import Scanner
 from .core.config import Config
+from .core.validation import DomainValidator
 
 
 app = FastAPI(title="Domain Intelligence API", version="1.0.0")
@@ -129,8 +130,21 @@ def scan(req: ScanRequest) -> ScanResponse:
     # Initialize scanner
     scanner = Scanner(cfg)
 
+    # Normalize domains so URL-like input (https://example.com/path) still scans correctly.
+    cleaned_domains: List[str] = []
+    seen_domains = set()
+    for domain in req.domains:
+        cleaned = DomainValidator.clean(domain)
+        if not cleaned or cleaned in seen_domains:
+            continue
+        seen_domains.add(cleaned)
+        cleaned_domains.append(cleaned)
+
+    if not cleaned_domains:
+        cleaned_domains = req.domains
+
     # Run scan (concurrent across domains)
-    results = scanner.scan_domains(req.domains, max_workers=req.workers)
+    results = scanner.scan_domains(cleaned_domains, max_workers=req.workers)
 
     # Generate reports and collect paths
     formats = req.output_formats or cfg.output_formats

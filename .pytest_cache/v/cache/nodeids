@@ -118,6 +118,7 @@
   "tests/test_security.py::TestSSRFProtectionIntegration::test_common_ssrf_targets_blocked",
   "tests/test_security.py::TestSSRFProtectionIntegration::test_legitimate_public_ips_allowed",
   "tests/test_tls_inspection.py::test_parse_certificate_extracts_structured_email_fields",
+  "tests/test_tls_inspection.py::test_parse_certificate_uses_binary_der_when_decoded_dict_is_empty",
   "tests/test_whois_lookup.py::test_execute_falls_back_to_whois",
   "tests/test_whois_lookup.py::test_execute_prefers_rdap",
   "tests/test_whois_lookup.py::test_execute_uses_rdap_when_available",
