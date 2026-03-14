@@ -14,15 +14,10 @@ from typing import Any, Dict, List, Optional, Tuple
 import dns.flags
 import dns.rdatatype
 import dns.resolver
+import pandas as pd
 import requests
 import streamlit as st
-<<<<<<< HEAD
 from src.core.risk_scoring import calculate_asn_reputation, parse_gemini_risk_payload, score_to_risk_level
-=======
-import pandas as pd
-from datetime import datetime
-
->>>>>>> origin/main
 
 
 BACKEND_URL = os.getenv("DOMAIN_INTEL_API", "http://127.0.0.1:8000")
@@ -1195,7 +1190,6 @@ def render_tabs(data: Dict[str, Any]) -> None:
                 }
             )
 
-<<<<<<< HEAD
             if asn_assessment:
                 signals = asn_assessment.get("signals", [])
                 if signals:
@@ -1203,9 +1197,6 @@ def render_tabs(data: Dict[str, Any]) -> None:
                 st.table(asn_assessment.get("per_asn", []))
 
     with tabs[7]:
-=======
-    with tabs[6]:
->>>>>>> origin/main
         st.subheader("Infrastructure")
         for result in results:
             domain = result.get("domain", "")
