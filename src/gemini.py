@@ -3,6 +3,10 @@ import time
 from google import genai
 from google.genai import errors
 from google.genai.types import HttpOptions
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 prompt = """
 You are an Enterprise Cybersecurity Domain Intelligence AI.
@@ -186,8 +190,9 @@ Passive security intelligence only.
 """
 class GeminiService:
     def __init__(self):
+        api_key = os.getenv("GEMINI_API_KEY")
         self.client = genai.Client(
-            api_key="AIzaSyAQU-oCHy3dDcWsSL4e1GqCE6zFCuLJS6Q",
+            api_key=api_key,
             http_options=HttpOptions(api_version="v1")
         )
         self.model = "gemini-2.5-flash"   # stable & fast
