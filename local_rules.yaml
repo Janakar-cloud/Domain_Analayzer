@@ -13,10 +13,10 @@ sensitive_patterns:
     regex: '[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'
     weight: 20
   - id: api_key_like
-    regex: '(?i)(api[_-]?key|authorization|bearer)\s*[:=]\s*["\''][A-Za-z0-9_\-]{16,}["\'']'
+    regex: "(?i)(api[_-]?key|authorization|bearer)\\s*[:=]\\s*[\"'][A-Za-z0-9_\\-]{16,}[\"']"
     weight: 15
   - id: secret_like
-    regex: '(?i)(secret|token|password)\s*[:=]\s*["\''][^"\']{12,}["\'']'
+    regex: "(?i)(secret|token|password)\\s*[:=]\\s*[\"'][^\"']{12,}[\"']"
     weight: 15
   - id: slack_webhook
     regex: 'https://hooks\.slack\.com/services/T[0-9A-Z]{9}/B[0-9A-Z]{9}/[A-Za-z0-9]{24}'

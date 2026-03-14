@@ -62,6 +62,7 @@ OTX_KEY=test_otx_key
 VT_KEY=test_vt_key
 CRIMINALIP_KEY=test_criminalip_key
 URLSCAN_KEY=test_urlscan_key
+SECAI_KEY=test_secai_key
 """
         with tempfile.NamedTemporaryFile(mode='w', suffix='.env', delete=False) as f:
             f.write(env_content)
@@ -153,6 +154,7 @@ class TestConfigAPIKeys:
         # Set environment variables
         monkeypatch.setenv("ABUSEIPDB_KEY", "test_key_123")
         monkeypatch.setenv("VT_KEY", "vt_test_key")
+        monkeypatch.setenv("SECAI_KEY", "secai_test_key")
         
         # Create minimal config file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
@@ -164,6 +166,7 @@ class TestConfigAPIKeys:
         
         assert config.get_api_key("abuseipdb") == "test_key_123"
         assert config.get_api_key("virustotal") == "vt_test_key"
+        assert config.get_api_key("secai") == "secai_test_key"
 
     def test_has_api_key(self, monkeypatch):
         """Test checking if API key exists."""

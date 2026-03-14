@@ -9,6 +9,7 @@ from .criminalip import CriminalIPModule
 from .local_reputation import LocalReputationModule
 from .google_safe_browsing import GoogleSafeBrowsingModule
 from .passive_dns import PassiveDNSModule
+from .secai import SecAIModule
 
 __all__ = [
     "BaseThreatIntelModule",
@@ -20,4 +21,5 @@ __all__ = [
     "LocalReputationModule",
     "GoogleSafeBrowsingModule",
     "PassiveDNSModule",
+    "SecAIModule",
 ]

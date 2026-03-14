@@ -70,6 +70,10 @@ class TLSCertificate:
     issuer_org: Optional[str] = None
     organization: Optional[str] = None
     san: List[str] = field(default_factory=list)
+    subject_emails: List[str] = field(default_factory=list)
+    issuer_emails: List[str] = field(default_factory=list)
+    san_emails: List[str] = field(default_factory=list)
+    email_addresses: List[str] = field(default_factory=list)
     not_before: Optional[datetime] = None
     not_after: Optional[datetime] = None
     serial_number: Optional[str] = None
@@ -86,6 +90,10 @@ class TLSCertificate:
             "issuer_org": self.issuer_org,
             "organization": self.organization,
             "san": self.san,
+            "subject_emails": self.subject_emails,
+            "issuer_emails": self.issuer_emails,
+            "san_emails": self.san_emails,
+            "email_addresses": self.email_addresses,
             "not_before": self.not_before.isoformat() if self.not_before else None,
             "not_after": self.not_after.isoformat() if self.not_after else None,
             "serial_number": self.serial_number,
@@ -99,7 +107,7 @@ class TLSCertificate:
 
 @dataclass
 class WHOISInfo:
-    """WHOIS registration information."""
+    """WHOIS/RDAP registration information."""
     registrar: Optional[str] = None
     registrant_org: Optional[str] = None
     registrant_country: Optional[str] = None
@@ -110,6 +118,7 @@ class WHOISInfo:
     dnssec: Optional[str] = None
     status: List[str] = field(default_factory=list)
     domain_age_days: Optional[int] = None
+    lookup_source: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -123,6 +132,7 @@ class WHOISInfo:
             "dnssec": self.dnssec,
             "status": self.status,
             "domain_age_days": self.domain_age_days,
+            "lookup_source": self.lookup_source,
         }
 
 

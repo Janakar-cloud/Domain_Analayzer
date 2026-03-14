@@ -100,6 +100,9 @@ class TestTLSCertificate:
             issuer="Let's Encrypt",
             issuer_org="ISRG",
             san=["example.com", "www.example.com"],
+            subject_emails=["admin@example.com"],
+            san_emails=["security@example.com"],
+            email_addresses=["admin@example.com", "security@example.com"],
             not_before=datetime(2024, 1, 1, tzinfo=timezone.utc),
             not_after=datetime(2025, 1, 1, tzinfo=timezone.utc),
             is_expired=False,
@@ -107,6 +110,7 @@ class TestTLSCertificate:
         )
         assert cert.subject_cn == "example.com"
         assert len(cert.san) == 2
+        assert cert.email_addresses == ["admin@example.com", "security@example.com"]
         assert cert.is_expired is False
 
     def test_certificate_to_dict(self):
@@ -122,6 +126,26 @@ class TestTLSCertificate:
         assert data["subject_cn"] == "test.com"
         assert data["key_type"] == "RSA"
         assert data["key_size"] == 2048
+        assert data["email_addresses"] == []
+
+    def test_certificate_email_fields_to_dict(self):
+        """Test explicit certificate email fields are serialized."""
+        cert = TLSCertificate(
+            subject_cn="example.com",
+            issuer="Example CA",
+            subject_emails=["admin@example.com"],
+            issuer_emails=["ca@example.net"],
+            san_emails=["security@example.com"],
+            email_addresses=["admin@example.com", "ca@example.net", "security@example.com"],
+        )
+
+        data = cert.to_dict()
+
+        assert data["subject_emails"] == ["admin@example.com"]
+        assert data["issuer_emails"] == ["ca@example.net"]
+        assert data["san_emails"] == ["security@example.com"]
+        assert data["email_addresses"] == ["admin@example.com", "ca@example.net", "security@example.com"]
+
 
 
 class TestDomainResult:

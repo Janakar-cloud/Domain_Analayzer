@@ -16,11 +16,18 @@ import dns.rdatatype
 import dns.resolver
 import requests
 import streamlit as st
+from src.core.risk_scoring import calculate_asn_reputation, parse_gemini_risk_payload, score_to_risk_level
 
 
 BACKEND_URL = os.getenv("DOMAIN_INTEL_API", "http://127.0.0.1:8000")
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 DEFAULT_WORKERS = int(os.getenv("DOMAIN_INTEL_WORKERS", "8"))
+DNS_TOOLBOX_ENABLED = os.getenv("DNS_TOOLBOX_ENABLED", "true").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+}
+GOOGLE_DNS_TOOLBOX_TYPES = ("A", "AAAA", "CNAME", "TXT", "ANY")
 
 REPUTABLE_NS_HINTS = {
     "cloudflare": "Cloudflare",
@@ -443,8 +450,28 @@ def classify_ns_provider(ns_name: str) -> str:
     return "Other/Unknown"
 
 
-def extract_cert_emails(result: Dict[str, Any]) -> List[str]:
+def extract_cert_email_rows(result: Dict[str, Any]) -> List[Dict[str, str]]:
     cert = result.get("tls_certificate") or {}
+    rows: List[Dict[str, str]] = []
+    seen = set()
+
+    for source, key in [
+        ("Subject", "subject_emails"),
+        ("Issuer", "issuer_emails"),
+        ("SAN email", "san_emails"),
+    ]:
+        for value in cert.get(key, []) or []:
+            email = str(value).strip().lower()
+            token = (source, email)
+            if not email or token in seen:
+                continue
+            seen.add(token)
+            rows.append({"email": email, "source": source})
+
+    if rows:
+        return rows
+
+    # Fallback for older report payloads generated before explicit certificate email parsing.
     candidates: List[str] = []
     for key in ["subject_cn", "issuer", "issuer_org", "organization"]:
         value = cert.get(key)
@@ -454,16 +481,16 @@ def extract_cert_emails(result: Dict[str, Any]) -> List[str]:
     for san in cert.get("san", []):
         candidates.append(str(san))
 
-    for finding in result.get("findings", []):
-        if finding.get("category") == "tls_security" and finding.get("evidence"):
-            candidates.append(str(finding.get("evidence")))
-
     extracted = set()
     for item in candidates:
         for match in EMAIL_RE.findall(item):
-            extracted.add(match.lower())
+            email = match.lower()
+            if email in extracted:
+                continue
+            extracted.add(email)
+            rows.append({"email": email, "source": "Legacy certificate text"})
 
-    return sorted(extracted)
+    return rows
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -492,6 +519,109 @@ def query_dns_any(domain: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         return rows, None
     except Exception as exc:
         return [], str(exc)
+
+
+def _normalize_dns_type(value: Any) -> str:
+    """Normalize DNS type values returned by APIs into human-readable labels."""
+    if isinstance(value, int):
+        try:
+            return dns.rdatatype.to_text(value)
+        except Exception:
+            return str(value)
+
+    text = str(value).strip().upper()
+    return text if text else "UNKNOWN"
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def query_google_dns_toolbox(domain: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Query Google DNS-over-HTTPS (dig-like toolbox) for core record types."""
+    rows: List[Dict[str, Any]] = []
+    notes: List[str] = []
+
+    for record_type in GOOGLE_DNS_TOOLBOX_TYPES:
+        try:
+            response = requests.get(
+                "https://dns.google/resolve",
+                params={"name": domain, "type": record_type},
+                timeout=6,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except Exception as exc:
+            notes.append(f"{record_type}: {exc}")
+            continue
+
+        status = payload.get("Status")
+        if status not in (0, None):
+            notes.append(f"{record_type}: status {status}")
+
+        for answer in payload.get("Answer", []) or []:
+            rows.append(
+                {
+                    "type": _normalize_dns_type(answer.get("type", record_type)),
+                    "name": str(answer.get("name", domain)).rstrip("."),
+                    "value": str(answer.get("data", "")),
+                    "ttl": answer.get("TTL"),
+                    "source": "google-dns-toolbox",
+                }
+            )
+
+    if not notes:
+        return rows, None
+
+    trimmed = notes[:3]
+    suffix = "; ..." if len(notes) > 3 else ""
+    return rows, "; ".join(trimmed) + suffix
+
+
+def club_dns_rows(*row_sets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Merge and deduplicate DNS rows while preserving source provenance."""
+    merged_index: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+    order: List[Tuple[str, str, str]] = []
+
+    for rows in row_sets:
+        for row in rows:
+            record_type = str(row.get("type", "")).strip().upper()
+            name = str(row.get("name", "")).strip().rstrip(".")
+            value = str(row.get("value", "")).strip()
+            ttl = row.get("ttl")
+            source = str(row.get("source", "unknown")).strip()
+
+            if not record_type or not name or not value:
+                continue
+
+            key = (record_type, name.lower(), value)
+            if key not in merged_index:
+                merged_index[key] = {
+                    "type": record_type,
+                    "name": name,
+                    "value": value,
+                    "ttl": ttl,
+                    "sources": [source],
+                }
+                order.append(key)
+            else:
+                item = merged_index[key]
+                if item["ttl"] is None and ttl is not None:
+                    item["ttl"] = ttl
+                if source not in item["sources"]:
+                    item["sources"].append(source)
+
+    normalized_rows: List[Dict[str, Any]] = []
+    for key in order:
+        item = merged_index[key]
+        normalized_rows.append(
+            {
+                "type": item["type"],
+                "name": item["name"],
+                "value": item["value"],
+                "ttl": item["ttl"],
+                "source": ", ".join(item["sources"]),
+            }
+        )
+
+    return normalized_rows
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -663,8 +793,10 @@ def build_local_executive_summary(results: List[Dict[str, Any]]) -> str:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def generate_gemini_summary(results: List[Dict[str, Any]]) -> Tuple[Optional[str], Optional[str]]:
-    """Generate an executive summary via Gemini API if key is available."""
+def generate_gemini_assessment(
+    results: List[Dict[str, Any]],
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Generate Gemini-derived risk score, level, and executive summary."""
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
         return None, "GEMINI_API_KEY not configured"
@@ -681,8 +813,10 @@ def generate_gemini_summary(results: List[Dict[str, Any]]) -> Tuple[Optional[str
         )
 
     prompt = (
-        "You are a cyber risk assistant. Provide a concise executive summary with business language. "
-        "Keep it under 120 words and include immediate priorities. Data: "
+        "You are a cyber risk assistant. Return STRICT JSON only with this schema: "
+        '{"risk_score": 0-100 integer, "risk_level": "Low|Medium|High|Critical", '
+        '"executive_summary": "<=120 words", "priorities": ["string", "string", "string"]}. '
+        "Use business language and include immediate priorities. Data: "
         + json.dumps(compact)
     )
 
@@ -692,7 +826,7 @@ def generate_gemini_summary(results: List[Dict[str, Any]]) -> Tuple[Optional[str
     )
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 220},
+        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 320},
     }
 
     try:
@@ -710,7 +844,15 @@ def generate_gemini_summary(results: List[Dict[str, Any]]) -> Tuple[Optional[str
         text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text")
         if not text:
             return None, "Gemini response text missing"
-        return text.strip(), None
+
+        parsed = parse_gemini_risk_payload(text)
+        if not parsed:
+            return None, "Gemini response JSON parsing failed"
+
+        if not parsed.get("executive_summary"):
+            parsed["executive_summary"] = build_local_executive_summary(results)
+
+        return parsed, None
     except Exception as exc:
         return None, str(exc)
 
@@ -771,12 +913,12 @@ def render_tabs(data: Dict[str, Any]) -> None:
         st.subheader("Certificate Email Addresses")
         for result in results:
             domain = result.get("domain", "")
-            emails = extract_cert_emails(result)
+            email_rows = extract_cert_email_rows(result)
             st.markdown(f"#### {domain}")
-            if not emails:
+            if not email_rows:
                 st.info("No certificate email address extracted")
             else:
-                st.table({"email": emails, "source": ["TLS certificate"] * len(emails)})
+                st.table(email_rows)
 
     with tabs[2]:
         st.subheader("DNS Records and DNSSEC")
@@ -799,13 +941,20 @@ def render_tabs(data: Dict[str, Any]) -> None:
             ]
 
             any_records, any_error = query_dns_any(domain)
-            rows = base_records + any_records
+            toolbox_records: List[Dict[str, Any]] = []
+            toolbox_error: Optional[str] = None
+            if DNS_TOOLBOX_ENABLED:
+                toolbox_records, toolbox_error = query_google_dns_toolbox(domain)
+
+            rows = club_dns_rows(base_records, any_records, toolbox_records)
             if rows:
                 st.table(rows)
             else:
                 st.info("No DNS rows available for A/AAAA/CNAME/TXT/ANY")
             if any_error:
                 st.caption(f"ANY query note: {any_error}")
+            if toolbox_error:
+                st.caption(f"Google Dig toolbox note: {toolbox_error}")
 
             ns_records = [r for r in result.get("dns_records", []) if r.get("type") == "NS"]
             soa_records = [r for r in result.get("dns_records", []) if r.get("type") == "SOA"]
@@ -869,6 +1018,7 @@ def render_tabs(data: Dict[str, Any]) -> None:
             vt_url = find_ti_source(result, ["VirusTotal URL"])
             abuse = find_ti_source(result, ["AbuseIPDB"])
             gsb = find_ti_source(result, ["Google Safe Browsing"])
+            secai = find_ti_source(result, ["SecAI"])
             urlscan = find_ti_source(result, ["URLScan.io"])
             otx = find_ti_source(result, ["AlienVault OTX"])
 
@@ -908,7 +1058,13 @@ def render_tabs(data: Dict[str, Any]) -> None:
                 },
                 {
                     "Area": "SecAI",
-                    "Value": "not integrated",
+                    "Value": (
+                        f"flagged={secai.get('is_malicious')}, "
+                        f"score={round((secai.get('confidence_score') or 0) * 100)}, "
+                        f"reports={secai.get('reports_count', 0)}"
+                        if secai
+                        else "not collected"
+                    ),
                 },
                 {
                     "Area": "URL Scan (Private mode)",
@@ -940,6 +1096,7 @@ def render_tabs(data: Dict[str, Any]) -> None:
                 continue
             st.write(
                 {
+                    "Lookup source": whois.get("lookup_source") or "WHOIS",
                     "Registrar": whois.get("registrar"),
                     "Creation date": whois.get("creation_date"),
                     "Expiry date": whois.get("expiration_date"),
@@ -958,6 +1115,7 @@ def render_tabs(data: Dict[str, Any]) -> None:
             st.markdown(f"#### {domain}")
 
             passive_dns = find_ti_source(result, ["SecurityTrails PassiveDNS"])
+            asn_assessment = calculate_asn_reputation(result.get("threat_intel", []))
 
             countries = set()
             providers = set()
@@ -986,16 +1144,30 @@ def render_tabs(data: Dict[str, Any]) -> None:
                 else:
                     passive_dns_value = "0 historical A records returned"
 
+            if asn_assessment:
+                asn_value = (
+                    f"{asn_assessment.get('level')} ({asn_assessment.get('score')}/100) across "
+                    + ", ".join(asn_assessment.get("asns", []))
+                )
+            else:
+                asn_value = ", ".join(sorted(asns)) or "not available"
+
             st.write(
                 {
                     "IP Geolocation (country/provider)": (
                         f"{', '.join(sorted(countries)) or 'not available'} / "
                         f"{', '.join(sorted(providers)) or 'not available'}"
                     ),
-                    "ASN reputation": ", ".join(sorted(asns)) or "not available",
+                    "ASN reputation": asn_value,
                     "Passive DNS / historical records": passive_dns_value,
                 }
             )
+
+            if asn_assessment:
+                signals = asn_assessment.get("signals", [])
+                if signals:
+                    st.caption("ASN signals: " + ", ".join(signals))
+                st.table(asn_assessment.get("per_asn", []))
 
     with tabs[7]:
         st.subheader("Infrastructure")
@@ -1037,33 +1209,42 @@ def render_tabs(data: Dict[str, Any]) -> None:
         st.subheader("AI Analysis")
         st.caption(
             "Provides a 0-100 risk score and executive summary. "
-            "Gemini is used when GEMINI_API_KEY is configured; otherwise local analysis is used."
+            "Gemini risk score is used when GEMINI_API_KEY is configured; "
+            "otherwise local analysis is used."
         )
 
         total_score = 0
         for result in results:
             total_score += int(result.get("severity_score", 0) or 0)
 
-        average_score = int(total_score / max(len(results), 1))
-        if average_score >= 80:
-            level = "Critical"
-        elif average_score >= 55:
-            level = "High"
-        elif average_score >= 25:
-            level = "Medium"
-        else:
-            level = "Low"
+        local_score = int(total_score / max(len(results), 1))
+        local_level = score_to_risk_level(local_score)
+        local_summary = build_local_executive_summary(results)
 
-        st.metric("Risk score (0-100)", average_score)
-        st.metric("Risk level", level)
+        display_score = local_score
+        display_level = local_level
+        display_summary = local_summary
+        priorities: List[str] = []
 
-        gemini_text, gemini_error = generate_gemini_summary(results)
-        if gemini_text:
+        gemini_assessment, gemini_error = generate_gemini_assessment(results)
+        if gemini_assessment:
+            display_score = int(gemini_assessment.get("risk_score", local_score) or local_score)
+            display_level = str(gemini_assessment.get("risk_level") or score_to_risk_level(display_score))
+            display_summary = str(gemini_assessment.get("executive_summary") or local_summary)
+            priorities = [str(item) for item in gemini_assessment.get("priorities", []) or []]
+
+        st.metric("Risk score (0-100)", display_score)
+        st.metric("Risk level", display_level)
+
+        if gemini_assessment:
             st.success("Gemini executive summary")
-            st.write(gemini_text)
+            st.write(display_summary)
+            if priorities:
+                st.write("Priority actions")
+                st.table([{"priority": item} for item in priorities])
         else:
             st.info("Local executive summary")
-            st.write(build_local_executive_summary(results))
+            st.write(display_summary)
             if gemini_error:
                 st.caption(f"Gemini status: {gemini_error}")
 

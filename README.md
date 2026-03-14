@@ -5,7 +5,7 @@ Domain Intelligence is a Windows‑friendly Python application that helps securi
 - Finds subdomains that were issued certificates in the past.
 - Lists DNS records (addresses, mail servers, text records).
 - Checks the website’s TLS certificate (who issued it, when it expires).
-- Looks up domain registration details (whois, age, expiry).
+- Looks up domain registration details (RDAP first, WHOIS fallback) including age and expiry.
 - Optionally calls SSL Labs to get a TLS grade quickly.
 - Follows redirects to see if the site hops around or downgrades security.
 - Scans homepage and a few same‑site links for secrets accidentally exposed (API keys, tokens).
@@ -54,6 +54,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/scan -ContentType "app
 ## Technical Architecture
 - Backend: FastAPI (`src/server.py`) exposes `/health` and `/scan`.
 - Frontend: Streamlit (`src/webui/app.py`) provides tabs for Posture, DNS, Certificate, Reputation, Findings.
+  The DNS tab merges scanner records with Google DNS-over-HTTPS (dig-toolbox style) responses for A/AAAA/CNAME/TXT/ANY when enabled.
 - Scanner: Orchestrates modules concurrently per domain (`src/scanner.py`), applies rate limiting and collects results.
 - Modules: Pluggable analyzers in `src/modules/` for CT, DNS, TLS, WHOIS, SSL Labs, redirects, content scan, takeover detection, and threat intel (local + optional external).
 - Reporters: JSON/CSV/HTML in `src/reporters/` produce machine‑readable and human‑friendly outputs.
@@ -63,7 +64,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/scan -ContentType "app
 - Certificate Transparency (`ct_enumeration`): queries crt.sh JSON, extracts names, filters valid subdomains, caps by `max_subdomains`, and adds findings for sensitive naming.
 - DNS Enumeration (`dns_enumeration`): uses dnspython with resolver timeouts to collect A, AAAA, CNAME, NS, MX, TXT, SOA; analyzes SPF/DMARC/DKIM, nameserver sufficiency, and dangling CNAMEs.
 - TLS Inspection (`tls_inspection`): connects via Python `ssl` to read cert details (CN, SANs, issuer, validity), flags expiry, mismatches, weak algorithms/keys, and self‑signed certs.
-- WHOIS Lookup (`whois_lookup`): wraps python‑whois in a thread to enforce a timeout; parses registrar, org, country, dates, and age; flags newly registered or expiring domains and DNSSEC status.
+- WHOIS Lookup (`whois_lookup`): uses RDAP first and falls back to python‑whois when RDAP is unavailable; parses registrar, org, country, dates, and age; flags newly registered or expiring domains and DNSSEC status.
 - SSL Labs (`ssllabs`): calls the public API; prefers cached results; polls with capped attempts; maps grade to severity and lists protocols and known TLS vulnerabilities.
 - Redirect Analysis (`redirect_analysis`): follows redirects with SSL verification; summarizes hop count and potential downgrade risks.
 - Content Scanner (`content_scanner`):
@@ -139,9 +140,10 @@ py cli.py report --output csv html
 - AlienVault OTX: OTX_KEY
 - VirusTotal: VT_KEY
 - CriminalIP: CRIMINALIP_KEY
-- URLScan: URLSCAN_KEY (needed for private scans)
+- URLScan: URLSCAN_KEY (config defaults to private visibility)
 - Google Safe Browsing: GOOGLE_SAFE_BROWSING_KEY
 - SecurityTrails (Passive DNS): SECURITYTRAILS_KEY
+- SecAI: SECAI_KEY
 - Note: Local reputation and content scanning run without external keys; SSL Labs requires no key.
 
 ## Repo Cleanup
@@ -156,6 +158,7 @@ py cli.py report --output csv html
 - SSL Labs slow or unavailable: enable Fast Mode, reduce `ssllabs_max_attempts`, and increase `ssllabs_max_age` to favor cache.
 - WHOIS stalls: the module enforces its own timeout; if registries are slow, results may be partial.
 - YAML rules errors: use proper quoting in `local_rules.yaml` and keep regexes simple; the app logs parse warnings.
+- DNS toolbox rows missing: confirm outbound HTTPS access to `https://dns.google/resolve` or disable with `DNS_TOOLBOX_ENABLED=false`.
 - Proxy usage: set `proxy.enabled` and HTTP/HTTPS URLs in `config.yaml`.
 
 ## Use Cases

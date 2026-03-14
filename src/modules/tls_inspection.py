@@ -108,20 +108,19 @@ class TLSInspectionModule(BaseModule):
         # Extract subject CN
         subject = dict(x[0] for x in cert.get("subject", []))
         subject_cn = subject.get("commonName", "")
+        subject_emails = self._extract_ssl_name_emails(cert.get("subject", []))
         
         # Extract issuer
         issuer = dict(x[0] for x in cert.get("issuer", []))
         issuer_cn = issuer.get("commonName", "")
         issuer_org = issuer.get("organizationName", "")
+        issuer_emails = self._extract_ssl_name_emails(cert.get("issuer", []))
         
         # Extract organization
         org = subject.get("organizationName", "")
         
         # Extract SANs
-        san_list = []
-        for san_type, san_value in cert.get("subjectAltName", []):
-            if san_type == "DNS":
-                san_list.append(san_value)
+        san_list, san_emails = self._extract_ssl_san_entries(cert.get("subjectAltName", []))
         
         # Parse dates
         not_before = self._parse_cert_date(cert.get("notBefore"))
@@ -141,8 +140,20 @@ class TLSInspectionModule(BaseModule):
         # Extract serial number
         serial = cert.get("serialNumber", "")
         
-        # Get signature algorithm and key info from binary cert if possible
-        sig_alg, key_type, key_size = self._extract_crypto_info(cert_binary)
+        # Get signature algorithm, key info, and structured email fields from binary cert if possible.
+        (
+            sig_alg,
+            key_type,
+            key_size,
+            binary_subject_emails,
+            binary_issuer_emails,
+            binary_san_emails,
+        ) = self._extract_crypto_details(cert_binary)
+
+        subject_emails = self._merge_unique_strings(subject_emails, binary_subject_emails)
+        issuer_emails = self._merge_unique_strings(issuer_emails, binary_issuer_emails)
+        san_emails = self._merge_unique_strings(san_emails, binary_san_emails)
+        email_addresses = self._merge_unique_strings(subject_emails, issuer_emails, san_emails)
         
         return TLSCertificate(
             subject_cn=subject_cn,
@@ -150,6 +161,10 @@ class TLSInspectionModule(BaseModule):
             issuer_org=issuer_org,
             organization=org,
             san=san_list,
+            subject_emails=subject_emails,
+            issuer_emails=issuer_emails,
+            san_emails=san_emails,
+            email_addresses=email_addresses,
             not_before=not_before,
             not_after=not_after,
             serial_number=serial,
@@ -176,19 +191,51 @@ class TLSInspectionModule(BaseModule):
                 self.logger.debug(f"Could not parse date: {date_str}")
                 return None
 
-    def _extract_crypto_info(self, cert_binary: bytes) -> Tuple[Optional[str], Optional[str], Optional[int]]:
+    def _extract_ssl_name_emails(self, name_entries: list) -> List[str]:
+        """Extract emailAddress values from ssl subject/issuer structures."""
+        emails = []
+        for entry in name_entries or []:
+            for item in entry:
+                if not item or len(item) < 2:
+                    continue
+                if str(item[0]).lower() == "emailaddress" and item[1]:
+                    emails.append(str(item[1]).strip().lower())
+        return self._merge_unique_strings(emails)
+
+    def _extract_ssl_san_entries(self, san_entries: list) -> Tuple[List[str], List[str]]:
+        """Split SAN entries into DNS names and RFC822 email names."""
+        dns_names = []
+        email_names = []
+
+        for san_type, san_value in san_entries or []:
+            if not san_value:
+                continue
+
+            normalized_type = str(san_type).strip().lower()
+            if normalized_type == "dns":
+                dns_names.append(str(san_value).strip())
+            elif normalized_type in {"email", "rfc822", "rfc822name"}:
+                email_names.append(str(san_value).strip().lower())
+
+        return self._merge_unique_strings(dns_names), self._merge_unique_strings(email_names)
+
+    def _extract_crypto_details(
+        self,
+        cert_binary: bytes,
+    ) -> Tuple[Optional[str], Optional[str], Optional[int], List[str], List[str], List[str]]:
         """
-        Extract cryptographic information from binary certificate.
+        Extract cryptographic information and structured email fields from binary certificate.
 
         Args:
             cert_binary: Binary certificate data
 
         Returns:
-            Tuple of (signature_algorithm, key_type, key_size)
+            Tuple of signature/key details plus subject, issuer, and SAN email lists.
         """
         try:
             from cryptography import x509
             from cryptography.hazmat.primitives.asymmetric import rsa, ec, dsa
+            from cryptography.x509.oid import NameOID
             
             cert = x509.load_der_x509_certificate(cert_binary)
             
@@ -210,15 +257,46 @@ class TLSInspectionModule(BaseModule):
             else:
                 key_type = type(public_key).__name__
                 key_size = None
+
+            subject_emails = self._merge_unique_strings(
+                [attr.value.strip().lower() for attr in cert.subject.get_attributes_for_oid(NameOID.EMAIL_ADDRESS)]
+            )
+            issuer_emails = self._merge_unique_strings(
+                [attr.value.strip().lower() for attr in cert.issuer.get_attributes_for_oid(NameOID.EMAIL_ADDRESS)]
+            )
+
+            san_emails: List[str] = []
+            try:
+                san_extension = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+                san_emails = self._merge_unique_strings(
+                    [value.strip().lower() for value in san_extension.value.get_values_for_type(x509.RFC822Name)]
+                )
+            except x509.ExtensionNotFound:
+                san_emails = []
             
-            return sig_alg, key_type, key_size
+            return sig_alg, key_type, key_size, subject_emails, issuer_emails, san_emails
             
         except ImportError:
             self.logger.debug("cryptography library not available for detailed cert parsing")
-            return None, None, None
+            return None, None, None, [], [], []
         except Exception as e:
             self.logger.debug(f"Error extracting crypto info: {e}")
-            return None, None, None
+            return None, None, None, [], [], []
+
+    def _merge_unique_strings(self, *groups: List[str]) -> List[str]:
+        """Merge string groups while preserving order and removing duplicates."""
+        merged = []
+        seen = set()
+
+        for group in groups:
+            for value in group:
+                normalized = value.strip()
+                if not normalized or normalized in seen:
+                    continue
+                seen.add(normalized)
+                merged.append(normalized)
+
+        return merged
 
     def _analyze_certificate(
         self, 

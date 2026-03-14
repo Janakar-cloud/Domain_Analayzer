@@ -28,6 +28,7 @@ from .modules.threat_intel import (
     LocalReputationModule,
     GoogleSafeBrowsingModule,
     PassiveDNSModule,
+    SecAIModule,
 )
 from .reporters import JSONReporter, CSVReporter, HTMLReporter
 
@@ -55,6 +56,7 @@ class Scanner:
         AlienVaultOTXModule,
         VirusTotalModule,
         GoogleSafeBrowsingModule,
+        SecAIModule,
         CriminalIPModule,
         URLScanModule,
         PassiveDNSModule,

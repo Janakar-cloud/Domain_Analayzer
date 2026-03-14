@@ -5,7 +5,9 @@ from typing import Optional
 
 import requests
 
+from ...core.config import Config
 from ...core.domain import DomainResult, ThreatIntelResult
+from ...core.rate_limiter import RateLimiter
 from ...core.security import IPValidator
 from ..base import BaseModule
 
@@ -19,8 +21,12 @@ class BaseThreatIntelModule(BaseModule):
     # Rate limit service name
     rate_limit_service: str = ""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        config: Config,
+        rate_limiter: Optional[RateLimiter] = None,
+    ) -> None:
+        super().__init__(config, rate_limiter)
         # Threat intel modules are configured under modules.threat_intel.<name> in config.yaml.
         # Keep top-level module config as an override path for runtime API toggles.
         nested_cfg = self.config.get(f"modules.threat_intel.{self.name}", {}) or {}

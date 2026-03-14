@@ -56,6 +56,7 @@ class Config:
             "urlscan": os.getenv("URLSCAN_KEY", ""),
             "google_safe_browsing": os.getenv("GOOGLE_SAFE_BROWSING_KEY", os.getenv("GSB_KEY", "")),
             "securitytrails": os.getenv("SECURITYTRAILS_KEY", ""),
+            "secai": os.getenv("SECAI_KEY", ""),
         }
 
     def get(self, key: str, default: Any = None) -> Any:

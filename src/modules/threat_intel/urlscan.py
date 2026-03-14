@@ -173,7 +173,7 @@ class URLScanModule(BaseThreatIntelModule):
         """
         self.rate_limit()
         
-        visibility = self._module_config.get("visibility", "public")
+        visibility = self._module_config.get("visibility", "private")
         url = f"https://{domain}"
         
         # Submit scan

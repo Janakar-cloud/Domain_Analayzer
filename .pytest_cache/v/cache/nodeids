@@ -35,6 +35,7 @@
   "tests/test_domain.py::TestSeverity::test_severity_comparison",
   "tests/test_domain.py::TestSeverity::test_severity_values",
   "tests/test_domain.py::TestTLSCertificate::test_certificate_creation",
+  "tests/test_domain.py::TestTLSCertificate::test_certificate_email_fields_to_dict",
   "tests/test_domain.py::TestTLSCertificate::test_certificate_to_dict",
   "tests/test_domain.py::TestThreatIntelResult::test_threat_intel_creation",
   "tests/test_domain.py::TestThreatIntelResult::test_threat_intel_to_dict",
@@ -75,6 +76,12 @@
   "tests/test_reporters.py::TestReporterFilenames::test_custom_prefix",
   "tests/test_reporters.py::TestReporterFilenames::test_html_filename_generation",
   "tests/test_reporters.py::TestReporterFilenames::test_json_filename_generation",
+  "tests/test_risk_scoring.py::test_calculate_asn_reputation_returns_none_without_asn",
+  "tests/test_risk_scoring.py::test_calculate_asn_reputation_scores_malicious_signals",
+  "tests/test_risk_scoring.py::test_parse_gemini_risk_payload_derives_level_when_missing",
+  "tests/test_risk_scoring.py::test_parse_gemini_risk_payload_from_fenced_json",
+  "tests/test_risk_scoring.py::test_parse_gemini_risk_payload_returns_none_for_non_json",
+  "tests/test_risk_scoring.py::test_score_to_risk_level_thresholds",
   "tests/test_security.py::TestDomainValidator::test_invalid_domain_empty",
   "tests/test_security.py::TestDomainValidator::test_invalid_domain_single_label",
   "tests/test_security.py::TestDomainValidator::test_invalid_domain_special_chars",
@@ -109,5 +116,10 @@
   "tests/test_security.py::TestIPValidator::test_safe_for_external_request_blocks_private",
   "tests/test_security.py::TestIPValidator::test_safe_for_external_request_invalid_ip",
   "tests/test_security.py::TestSSRFProtectionIntegration::test_common_ssrf_targets_blocked",
-  "tests/test_security.py::TestSSRFProtectionIntegration::test_legitimate_public_ips_allowed"
+  "tests/test_security.py::TestSSRFProtectionIntegration::test_legitimate_public_ips_allowed",
+  "tests/test_tls_inspection.py::test_parse_certificate_extracts_structured_email_fields",
+  "tests/test_whois_lookup.py::test_execute_falls_back_to_whois",
+  "tests/test_whois_lookup.py::test_execute_prefers_rdap",
+  "tests/test_whois_lookup.py::test_execute_uses_rdap_when_available",
+  "tests/test_whois_lookup.py::test_parse_rdap_response_basic"
 ]

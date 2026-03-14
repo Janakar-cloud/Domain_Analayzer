@@ -71,10 +71,19 @@ modules:
         - SOCIAL_ENGINEERING
         - UNWANTED_SOFTWARE
         - POTENTIALLY_HARMFUL_APPLICATION
-    
+
+    secai:
+      enabled: true
+      # Override these when your tenant uses different endpoint paths.
+      # base_url: https://api.secai.ai/v1
+      # domain_endpoint: /reputation/domain/{domain}
+      # ip_endpoint: /reputation/ip/{ip}
+      # auth_header: Authorization
+      # auth_scheme: Bearer
+
     urlscan:
       enabled: true
-      visibility: public  # public or private
+      visibility: private  # public or private
       store_screenshots: true
 
     passive_dns:
@@ -110,6 +119,7 @@ rate_limits:
   alienvault_otx: 10
   virustotal: 4
   google_safe_browsing: 30
+  secai: 10
   criminalip: 10
   urlscan: 2
   securitytrails: 10
