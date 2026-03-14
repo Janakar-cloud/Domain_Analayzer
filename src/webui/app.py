@@ -16,7 +16,13 @@ import dns.rdatatype
 import dns.resolver
 import requests
 import streamlit as st
+<<<<<<< HEAD
 from src.core.risk_scoring import calculate_asn_reputation, parse_gemini_risk_payload, score_to_risk_level
+=======
+import pandas as pd
+from datetime import datetime
+
+>>>>>>> origin/main
 
 
 BACKEND_URL = os.getenv("DOMAIN_INTEL_API", "http://127.0.0.1:8000")
@@ -885,15 +891,16 @@ def render_overview(summary: Dict[str, Any], results: List[Dict[str, Any]]) -> N
     c1.metric("Domains", summary.get("domains", len(results)))
     c2.metric("Critical + High", crit + high)
     c3.metric("Findings", summary.get("total_findings", 0))
-    c4.metric("Last Scan", str(last_scan_time))
-
+    # c4.metric("Last Scan", str(last_scan_time))
+    dt = datetime.fromisoformat(last_scan_time)
+    c4.metric("Last Scan", dt.strftime("%d %b %H:%M"))
 
 def render_tabs(data: Dict[str, Any]) -> None:
     """Render area-specific report tabs."""
     results = data.get("results", [])
     tabs = st.tabs(
         [
-            "Security.txt",
+            # "Security.txt",
             "Email Addresses",
             "DNS",
             "SSL/TLS",
@@ -906,28 +913,28 @@ def render_tabs(data: Dict[str, Any]) -> None:
         ]
     )
 
+    # with tabs[0]:
+    #     st.subheader("security.txt")
+    #     st.caption("Checks /.well-known/security.txt first, then /security.txt.")
+    #     for result in results:
+    #         domain = result.get("domain", "")
+    #         info = fetch_security_txt(domain)
+    #         st.markdown(f"#### {domain}")
+    #         if not info["found"]:
+    #             st.warning("security.txt not found")
+    #             continue
+
+    #         st.success(f"Found at: {info['location']}")
+    #         st.write(
+    #             {
+    #                 "Contact": ", ".join(info["contact"]) if info["contact"] else "-",
+    #                 "Expires": info["expires"] or "-",
+    #                 "Expires in future": info["expires_future"],
+    #                 "Policy": ", ".join(info["policy"]) if info["policy"] else "-",
+    #             }
+    #         )
+
     with tabs[0]:
-        st.subheader("security.txt")
-        st.caption("Checks /.well-known/security.txt first, then /security.txt.")
-        for result in results:
-            domain = result.get("domain", "")
-            info = fetch_security_txt(domain)
-            st.markdown(f"#### {domain}")
-            if not info["found"]:
-                st.warning("security.txt not found")
-                continue
-
-            st.success(f"Found at: {info['location']}")
-            st.write(
-                {
-                    "Contact": ", ".join(info["contact"]) if info["contact"] else "-",
-                    "Expires": info["expires"] or "-",
-                    "Expires in future": info["expires_future"],
-                    "Policy": ", ".join(info["policy"]) if info["policy"] else "-",
-                }
-            )
-
-    with tabs[1]:
         st.subheader("Certificate Email Addresses")
         for result in results:
             domain = result.get("domain", "")
@@ -945,7 +952,7 @@ def render_tabs(data: Dict[str, Any]) -> None:
             else:
                 st.table(email_rows)
 
-    with tabs[2]:
+    with tabs[1]:
         st.subheader("DNS Records and DNSSEC")
         requested_types = {"CNAME", "TXT", "AAAA", "A"}
 
@@ -1013,7 +1020,7 @@ def render_tabs(data: Dict[str, Any]) -> None:
                     }
                 )
 
-    with tabs[3]:
+    with tabs[2]:
         st.subheader("SSL/TLS")
         for result in results:
             domain = result.get("domain", "")
@@ -1033,7 +1040,7 @@ def render_tabs(data: Dict[str, Any]) -> None:
             if ssllabs.get("vulnerabilities"):
                 st.caption("Vulnerabilities: " + ", ".join(ssllabs.get("vulnerabilities", [])))
 
-    with tabs[4]:
+    with tabs[3]:
         st.subheader("Reputation Feeds")
         for result in results:
             domain = result.get("domain", "")
@@ -1110,7 +1117,7 @@ def render_tabs(data: Dict[str, Any]) -> None:
             ]
             st.table(rows)
 
-    with tabs[5]:
+    with tabs[4]:
         st.subheader("WHOIS")
         for result in results:
             domain = result.get("domain", "")
@@ -1133,7 +1140,7 @@ def render_tabs(data: Dict[str, Any]) -> None:
             if whois.get("name_servers"):
                 st.caption("Name servers: " + ", ".join(whois.get("name_servers", [])))
 
-    with tabs[6]:
+    with tabs[5]:
         st.subheader("Geolocation and ASN")
         for result in results:
             domain = result.get("domain", "")
@@ -1188,6 +1195,7 @@ def render_tabs(data: Dict[str, Any]) -> None:
                 }
             )
 
+<<<<<<< HEAD
             if asn_assessment:
                 signals = asn_assessment.get("signals", [])
                 if signals:
@@ -1195,6 +1203,9 @@ def render_tabs(data: Dict[str, Any]) -> None:
                 st.table(asn_assessment.get("per_asn", []))
 
     with tabs[7]:
+=======
+    with tabs[6]:
+>>>>>>> origin/main
         st.subheader("Infrastructure")
         for result in results:
             domain = result.get("domain", "")
@@ -1230,7 +1241,7 @@ def render_tabs(data: Dict[str, Any]) -> None:
                 st.caption("CSAF provider metadata")
                 st.json(csaf_payload)
 
-    with tabs[8]:
+    with tabs[7]:
         st.subheader("AI Analysis")
         st.caption(
             "Provides a 0-100 risk score and executive summary. "
@@ -1273,7 +1284,7 @@ def render_tabs(data: Dict[str, Any]) -> None:
             if gemini_error:
                 st.caption(f"Gemini status: {gemini_error}")
 
-    with tabs[9]:
+    with tabs[8]:
         st.subheader("Findings")
         for result in results:
             domain = result.get("domain", "")
@@ -1335,14 +1346,25 @@ def main() -> None:
         "Light theme report workspace. Scan options are hidden; "
         "the app runs a fixed internal scan profile."
     )
+    st.markdown(
+    """
+    <style>
+    [data-testid="stHeader"] {
+        display: none;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
     if "scan_data" not in st.session_state:
         st.session_state["scan_data"] = None
 
     domains_input = st.text_area(
         "Domains (one per line)",
-        "example.com\nexample.org",
+        placeholder="example.com\nexample.org",
         height=120,
+        help="Enter domains like example.com. Do not include http://, https://, or paths."
     )
 
     c1, c2 = st.columns([1, 3])
@@ -1373,10 +1395,57 @@ def main() -> None:
     st.divider()
     render_tabs(data)
 
+    # st.divider()
+    # st.subheader("Generated Reports")
+    # for path in data.get("reports", []):
+    #     st.write(f"- {path}")
     st.divider()
-    st.subheader("Generated Reports")
-    for path in data.get("reports", []):
-        st.write(f"- {path}")
+    st.subheader("Export Report")
+
+    results = data.get("results", [])
+
+    col1, spacer, col2 = st.columns([1,0.3,1])
+
+    # Export JSON
+    with col1:
+        json_report = json.dumps(data, indent=2)
+
+        st.download_button(
+            label="⬇ Download Full JSON Report",
+            data=json_report,
+            file_name="domain_intelligence_report.json",
+            mime="application/json",
+            use_container_width=True
+        )
+
+        # Export CSV
+        with col2:
+            rows = []
+
+            for result in results:
+                domain = result.get("domain")
+
+                for finding in result.get("findings", []):
+                    rows.append({
+                    "domain": domain,
+                    "severity": finding.get("severity"),
+                    "title": finding.get("title"),
+                    "description": finding.get("description"),
+                    "remediation": finding.get("remediation"),
+                })
+
+        if rows:
+            df = pd.DataFrame(rows)
+
+            st.download_button(
+                label="⬇ Download Findings CSV",
+                data=df.to_csv(index=False),
+                file_name="domain_findings.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        else:
+            st.caption("No findings available for CSV export.")
 
 
 if __name__ == "__main__":
